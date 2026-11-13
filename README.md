@@ -26,7 +26,7 @@ A realistic 3D city-building game targeting Android.
 - The current visuals use built-in primitive geometry and the legacy Standard shader. They are greybox placeholders, not photorealistic assets.
 - The first touch interaction uses Unity's legacy mouse input mapping; the final Android input system must be configured and device-tested.
 - No complete Unity project scaffold, production assets, online multiplayer backend, or verified Android APK is included yet.
-- Unity Editor is pinned to Unity 6.3 (`6000.3.0f1`) for the initial cloud-build setup; confirm this editor release is available in the Unity Build Automation dashboard before the first build.
+- Unity Editor is pinned to Unity 6.3 (`6000.3.28f1`) for the initial cloud-build setup; confirm this editor release is available in the Unity Build Automation dashboard before the first build.
 
 ## Project structure
 - `Assets/Scripts/` contains prototype gameplay scripts.
@@ -41,7 +41,7 @@ A realistic 3D city-building game targeting Android.
 2. Open DevOps > Build Automation > Settings > Source control.
 3. Select GitHub and authorize repository access. This repository is public, so read-only access is sufficient for a manual build; auto-build needs repository webhook permission.
 4. Save the source-control settings, then create a build configuration for the `main` branch.
-5. Choose Android, select Unity `6000.3.0f1` (or the exact version confirmed in the dashboard), and configure an APK build rather than an Android App Bundle for direct phone installation.
+5. Choose Android, select Unity `6000.3.28f1` (or the exact version confirmed in the dashboard), and configure an APK build rather than an Android App Bundle for direct phone installation.
 6. Start a build and check Build history. Download/install only after the build reports success.
 
 Cloud build is not yet configured or tested. The project still needs a real Unity scene and a successful Unity import/compile before an APK can be expected.
