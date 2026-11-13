@@ -26,7 +26,25 @@ A realistic 3D city-building game targeting Android.
 - The current visuals use built-in primitive geometry and the legacy Standard shader. They are greybox placeholders, not photorealistic assets.
 - The first touch interaction uses Unity's legacy mouse input mapping; the final Android input system must be configured and device-tested.
 - No complete Unity project scaffold, production assets, online multiplayer backend, or verified Android APK is included yet.
-- Unity Editor version and Android build configuration must be pinned before configuring a cloud build pipeline.
+- Unity Editor is pinned to Unity 6.3 (`6000.3.0f1`) for the initial cloud-build setup; confirm this editor release is available in the Unity Build Automation dashboard before the first build.
+
+## Project structure
+- `Assets/Scripts/` contains prototype gameplay scripts.
+- `Assets/_Project/Scenes/` is reserved for production scenes.
+- `Assets/_Project/Art/` contains models and textures.
+- `Assets/_Project/Materials/`, `Prefabs/`, `UI/`, `Audio/`, and `Settings/` organize production assets.
+- `Packages/manifest.json` defines Unity Package Manager dependencies.
+- `ProjectSettings/ProjectVersion.txt` pins the editor version for cloud auto-detection.
+
+## Android cloud build path
+1. Open the Unity Cloud Dashboard and select this Unity project.
+2. Open DevOps > Build Automation > Settings > Source control.
+3. Select GitHub and authorize repository access. This repository is public, so read-only access is sufficient for a manual build; auto-build needs repository webhook permission.
+4. Save the source-control settings, then create a build configuration for the `main` branch.
+5. Choose Android, select Unity `6000.3.0f1` (or the exact version confirmed in the dashboard), and configure an APK build rather than an Android App Bundle for direct phone installation.
+6. Start a build and check Build history. Download/install only after the build reports success.
+
+Cloud build is not yet configured or tested. The project still needs a real Unity scene and a successful Unity import/compile before an APK can be expected.
 
 ## Validation status
 Source files have been committed to GitHub. No Unity compilation, Play Mode test, Android device test, or APK build has been run yet.
