@@ -28,7 +28,7 @@ public sealed class CityPrototype : MonoBehaviour
 
         float citySize = blocksPerSide * blockSize + (blocksPerSide + 1) * roadWidth;
         CreatePrimitive("Ground", PrimitiveType.Plane,
-            new Vector3(citySize / 20f, -0.12f, citySize / 20f),
+            new Vector3(citySize / 2f, -0.12f, citySize / 2f),
             new Vector3(citySize / 10f, 1f, citySize / 10f),
             new Color(0.24f, 0.34f, 0.22f));
 
