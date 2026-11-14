@@ -347,7 +347,7 @@ func _update_city_life(delta: float) -> void:
 		if i < cargo_routes.size():
 			var route: Array = cargo_routes[i]
 			var old_progress := route_progress[i]
-			route_progress[i] = fposmod(old_progress + delta * 0.012, 1.0)
+			route_progress[i] = fposmod(old_progress + delta * 0.035, 1.0)
 			if route_progress[i] < old_progress:
 				_deliver_cargo(i)
 			var scaled_progress := route_progress[i] * float(route.size() - 1)
@@ -443,9 +443,12 @@ func _deliver_cargo(truck_index: int) -> void:
 		var food_load := mini(30, int(farm.get("stock", 0)))
 		farm["stock"] = int(farm.get("stock", 0)) - food_load
 		production_sites[0] = farm
-		food_stock = clampi(food_stock + food_load, 0, 500)
+		var capital_share := int(food_load * 0.6)
+		var town_share := food_load - capital_share
+		food_stock = clampi(food_stock + capital_share, 0, 500)
+		town_food_stock[0] = mini(500, town_food_stock[0] + town_share)
 		delivered_food_total += food_load
-		status_label.text = "Farm truck delivered %d food to the capital." % food_load
+		status_label.text = "Farm truck delivered %d food: %d to capital, %d to Town 1." % [food_load, capital_share, town_share]
 	elif truck_index == 1:
 		var mine: Dictionary = production_sites[1]
 		var ore_load := mini(24, int(mine.get("stock", 0)))
@@ -731,7 +734,10 @@ func _save_game() -> void:
 	for entry in buildings:
 		var p: Vector3 = entry.position
 		saved_buildings.append({"x": p.x, "z": p.z, "kind": entry.kind})
-	var data := {"coins": coins, "soldiers": soldiers, "supplies": supplies, "captured": captured, "buildings": saved_buildings, "service_levels": service_levels, "food_stock": food_stock, "goods_stock": goods_stock, "city_happiness": city_happiness, "citizen_needs": citizen_needs}
+	var saved_production: Array[Dictionary] = []
+	for site in production_sites:
+		saved_production.append({"kind": site.get("kind", ""), "stock": int(site.get("stock", 0))})
+	var data := {"coins": coins, "soldiers": soldiers, "supplies": supplies, "captured": captured, "buildings": saved_buildings, "service_levels": service_levels, "food_stock": food_stock, "goods_stock": goods_stock, "city_happiness": city_happiness, "citizen_needs": citizen_needs, "factory_ore_stock": factory_ore_stock, "town_food_stock": town_food_stock, "town_goods_stock": town_goods_stock, "production_stocks": saved_production}
 	var file := FileAccess.open(SAVE_PATH, FileAccess.WRITE)
 	if file == null:
 		status_label.text = "Could not save the game on this device."
@@ -762,6 +768,20 @@ func _load_game() -> void:
 		service_levels[service_name] = maxi(0, int(saved_services.get(service_name, 0)))
 	food_stock = maxi(0, int(parsed.get("food_stock", 180)))
 	goods_stock = maxi(0, int(parsed.get("goods_stock", 120)))
+	factory_ore_stock = maxi(0, int(parsed.get("factory_ore_stock", 0)))
+	var saved_town_food: Array = parsed.get("town_food_stock", [])
+	var saved_town_goods: Array = parsed.get("town_goods_stock", [])
+	for town_index in range(5):
+		if town_index < saved_town_food.size():
+			town_food_stock[town_index] = maxi(0, int(saved_town_food[town_index]))
+		if town_index < saved_town_goods.size():
+			town_goods_stock[town_index] = maxi(0, int(saved_town_goods[town_index]))
+	var saved_production: Array = parsed.get("production_stocks", [])
+	for site_index in range(mini(production_sites.size(), saved_production.size())):
+		var saved_site: Dictionary = saved_production[site_index]
+		var site: Dictionary = production_sites[site_index]
+		site["stock"] = maxi(0, int(saved_site.get("stock", 0)))
+		production_sites[site_index] = site
 	city_happiness = clampi(int(parsed.get("city_happiness", 72)), 0, 100)
 	var saved_needs: Array = parsed.get("citizen_needs", [])
 	for i in range(mini(citizen_needs.size(), saved_needs.size())):
