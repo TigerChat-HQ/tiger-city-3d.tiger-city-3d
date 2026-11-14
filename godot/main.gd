@@ -101,7 +101,7 @@ func _build_ui() -> void:
 
 func _select_building(kind: int) -> void:
 	selected_building = kind
-	status_label.text = "Selected building: " + ["House", "Shop", "Office"][kind] + ". Tap BUILD SITE to place."
+	status_label.text = "Selected building: " + ["House", "Shop", "Office"][kind] + ". A prototype building will be placed now."
 	_place_building()
 
 func _place_building() -> void:
