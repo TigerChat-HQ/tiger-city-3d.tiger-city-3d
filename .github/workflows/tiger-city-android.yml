@@ -2,6 +2,12 @@ name: TIGER CITY 3D Android APK
 
 on:
   workflow_dispatch:
+  pull_request:
+    branches:
+      - migration/godot-android-prototype
+    paths:
+      - "godot/**"
+      - ".github/workflows/tiger-city-android.yml"
   push:
     branches:
       - feat/standalone-android-app
