@@ -41,6 +41,11 @@ var service_levels := {"water": 0, "power": 0, "health": 0, "education": 0}
 var service_costs := {"water": 350, "power": 450, "health": 600, "education": 500}
 var last_economy_income := 0
 var last_economy_expense := 0
+var food_stock := 180
+var goods_stock := 120
+var city_happiness := 72
+var citizen_needs: Array[Dictionary] = []
+var last_trade_income := 0
 
 func _ready() -> void:
 	_build_world()
@@ -65,7 +70,9 @@ func _build_world() -> void:
 			var px := (float(x) - GRID / 2.0 + 0.5) * (BLOCK + ROAD)
 			var pz := (float(z) - GRID / 2.0 + 0.5) * (BLOCK + ROAD)
 			var h := rng.randf_range(4.0, 15.0)
-			_add_box("Building", Vector3(px, h / 2.0, pz), Vector3(rng.randf_range(3.5, 6.0), h, rng.randf_range(3.5, 6.0)), Color(0.45, 0.48, 0.52).lerp(Color(0.72, 0.65, 0.52), rng.randf()))
+			var building_size := Vector3(rng.randf_range(3.5, 6.0), h, rng.randf_range(3.5, 6.0))
+			var building_color := Color(0.45, 0.48, 0.52).lerp(Color(0.72, 0.65, 0.52), rng.randf())
+			_add_detailed_building("Capital block", Vector3(px, h / 2.0, pz), building_size, building_color)
 	for i in range(5):
 		var angle := TAU * float(i) / 5.0
 		_add_box("Rival district", Vector3(cos(angle) * 62.0, 2.0, sin(angle) * 62.0), Vector3(9, 4, 9), Color(0.62, 0.18, 0.15))
@@ -93,8 +100,8 @@ func _build_neighbor_cities() -> void:
 			var height := 4.0 + float((building_index * 3 + city_index) % 5) * 1.8
 			var tint: Color = palette[building_index % 2]
 			var local_pos := Vector3((slot - 1.5) * 5.0, height * 0.5, (ring - 0.5) * 8.0)
-			_add_box("Town %d building %d" % [city_index, building_index], center + local_pos, Vector3(3.8, height, 4.2), tint)
-		_add_box("Town %d landmark" % city_index, center + Vector3(0, 5.5, 0), Vector3(5, 11, 5), palette[1])
+			_add_detailed_building("Town %d building %d" % [city_index, building_index], center + local_pos, Vector3(3.8, height, 4.2), tint)
+		_add_detailed_building("Town %d landmark" % city_index, center + Vector3(0, 5.5, 0), Vector3(5, 11, 5), palette[1])
 
 func _build_service(service_name: String) -> void:
 	if not service_levels.has(service_name):
@@ -111,6 +118,34 @@ func _build_service(service_name: String) -> void:
 	_add_box(service_name.capitalize() + " service", service_positions[service_name], Vector3(5, height, 5), service_colors[service_name])
 	status_label.text = "%s service upgraded to level %d." % [service_name.capitalize(), service_levels[service_name]]
 	_update_ui()
+func _add_detailed_building(label: String, pos: Vector3, size: Vector3, tint: Color) -> MeshInstance3D:
+	var building := _add_box(label, pos, size, tint)
+	var window_material := StandardMaterial3D.new()
+	window_material.albedo_color = Color(0.22, 0.48, 0.62)
+	window_material.metallic = 0.22
+	window_material.roughness = 0.28
+	var floors := maxi(1, int(size.y / 2.6))
+	var columns := maxi(1, int(size.x / 1.5))
+	for floor_index in range(floors):
+		for column_index in range(columns):
+			var window_mesh := MeshInstance3D.new()
+			var window_shape := BoxMesh.new()
+			window_shape.size = Vector3(0.42, 0.72, 0.07)
+			window_mesh.mesh = window_shape
+			window_mesh.position = Vector3(pos.x - size.x * 0.5 + 0.75 + float(column_index) * 1.15, 1.0 + float(floor_index) * 2.35, pos.z - size.z * 0.5 - 0.045)
+			window_mesh.material_override = window_material
+			city_root.add_child(window_mesh)
+	var roof := MeshInstance3D.new()
+	var roof_shape := BoxMesh.new()
+	roof_shape.size = Vector3(size.x + 0.35, 0.22, size.z + 0.35)
+	roof.mesh = roof_shape
+	roof.position = pos + Vector3(0, size.y * 0.5 + 0.12, 0)
+	var roof_material := StandardMaterial3D.new()
+	roof_material.albedo_color = tint.darkened(0.28)
+	roof.material_override = roof_material
+	city_root.add_child(roof)
+	return building
+
 func _add_box(label: String, pos: Vector3, size: Vector3, tint: Color) -> MeshInstance3D:
 	var mesh := BoxMesh.new()
 	mesh.size = size
@@ -193,6 +228,7 @@ func _spawn_city_life() -> void:
 		person.position = Vector3(-33.0 + float(i % 7) * 11.0, 0.72, -42.0 + float(i) * 6.0)
 		city_root.add_child(person)
 		city_citizens.append(person)
+		citizen_needs.append({"hunger": 0.0, "health": 80.0, "education": 20.0, "happiness": 72.0})
 	for i in range(8):
 		var car := MeshInstance3D.new()
 		var shape := BoxMesh.new()
@@ -231,10 +267,41 @@ func _update_city_life(delta: float) -> void:
 		var service_total := 0
 		for level in service_levels.values():
 			service_total += int(level)
-		var income := 10 + shop_count * 18 + office_count * 28 + service_total * 4
-		var maintenance := buildings.size() * 2 + service_total * 7
-		var taxes := city_citizens.size() + service_total * 3
-		last_economy_income = income + taxes
+		var population := city_citizens.size()
+		var water_coverage := mini(100, 35 + int(service_levels["water"]) * 20)
+		var power_coverage := mini(100, 35 + int(service_levels["power"]) * 20)
+		var health_coverage := mini(100, 25 + int(service_levels["health"]) * 25)
+		var education_coverage := mini(100, 20 + int(service_levels["education"]) * 25)
+		var food_produced := 8 + shop_count * 9
+		var goods_produced := 5 + shop_count * 7 + office_count * 2
+		food_stock = mini(500, food_stock + food_produced - population * 2)
+		goods_stock = mini(500, goods_stock + goods_produced - population)
+		var food_shortage := food_stock < 20
+		var goods_shortage := goods_stock < 15
+		for i in range(citizen_needs.size()):
+			var needs: Dictionary = citizen_needs[i]
+			needs["hunger"] = clampf(float(needs["hunger"]) + (1.0 if food_shortage else -0.35), 0.0, 100.0)
+			needs["health"] = clampf(float(needs["health"]) + (float(health_coverage) - 55.0) * 0.035 - (2.0 if food_shortage else 0.0), 0.0, 100.0)
+			needs["education"] = clampf(float(needs["education"]) + float(education_coverage) * 0.012, 0.0, 100.0)
+			var citizen_happiness := 68.0 + float(water_coverage + power_coverage) * 0.10 + float(health_coverage + education_coverage) * 0.06
+			if food_shortage:
+				citizen_happiness -= 18.0
+			if goods_shortage:
+				citizen_happiness -= 8.0
+			needs["happiness"] = clampf(citizen_happiness - float(needs["hunger"]) * 0.25, 0.0, 100.0)
+			citizen_needs[i] = needs
+		var happiness_total := 0.0
+		for needs in citizen_needs:
+			happiness_total += float(needs["happiness"])
+		if citizen_needs.size() > 0:
+			city_happiness = int(happiness_total / citizen_needs.size())
+		var business_income := 10 + shop_count * 18 + office_count * 28
+		var taxes := int(population * (0.5 + float(city_happiness) / 100.0))
+		last_trade_income = 0
+		if captured > 0:
+			last_trade_income = captured * (12 + shop_count * 3 + int(power_coverage / 20))
+		var maintenance := buildings.size() * 2 + service_total * 7 + 8
+		last_economy_income = business_income + taxes + service_total * 4 + last_trade_income
 		last_economy_expense = maintenance
 		coins += last_economy_income - last_economy_expense
 		if supplies < 200:
@@ -514,7 +581,7 @@ func _save_game() -> void:
 	for entry in buildings:
 		var p: Vector3 = entry.position
 		saved_buildings.append({"x": p.x, "z": p.z, "kind": entry.kind})
-	var data := {"coins": coins, "soldiers": soldiers, "supplies": supplies, "captured": captured, "buildings": saved_buildings, "service_levels": service_levels}
+	var data := {"coins": coins, "soldiers": soldiers, "supplies": supplies, "captured": captured, "buildings": saved_buildings, "service_levels": service_levels, "food_stock": food_stock, "goods_stock": goods_stock, "city_happiness": city_happiness}
 	var file := FileAccess.open(SAVE_PATH, FileAccess.WRITE)
 	if file == null:
 		status_label.text = "Could not save the game on this device."
@@ -543,6 +610,9 @@ func _load_game() -> void:
 	var saved_services: Dictionary = parsed.get("service_levels", {})
 	for service_name in service_levels.keys():
 		service_levels[service_name] = maxi(0, int(saved_services.get(service_name, 0)))
+	food_stock = maxi(0, int(parsed.get("food_stock", 180)))
+	goods_stock = maxi(0, int(parsed.get("goods_stock", 120)))
+	city_happiness = clampi(int(parsed.get("city_happiness", 72)), 0, 100)
 	for item in buildings:
 		var node = item.get("node")
 		if is_instance_valid(node):
@@ -560,4 +630,4 @@ func _load_game() -> void:
 func _update_ui() -> void:
 	if stats_label:
 		var service_summary := "Water %d | Power %d | Health %d | School %d" % [service_levels["water"], service_levels["power"], service_levels["health"], service_levels["education"]]
-		stats_label.text = "Coins: %d\nSoldiers: %d\nSupplies: %d\nDistricts captured: %d/5\nServices: %s\nLast cycle: +%d / -%d" % [coins, soldiers, supplies, captured, service_summary, last_economy_income, last_economy_expense]
+		stats_label.text = "Coins: %d\nSoldiers: %d\nSupplies: %d\nDistricts captured: %d/5\nServices: %s\nPeople: %d | Happiness: %d%%\nFood: %d | Goods: %d\nCycle: +%d / -%d | Trade: +%d" % [coins, soldiers, supplies, captured, service_summary, city_citizens.size(), city_happiness, food_stock, goods_stock, last_economy_income, last_economy_expense, last_trade_income]
