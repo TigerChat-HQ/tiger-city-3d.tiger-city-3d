@@ -50,6 +50,13 @@ var service_nodes: Dictionary = {}
 var production_sites: Array[Dictionary] = []
 var route_points: Array[Vector3] = []
 var route_progress: Array[float] = []
+var cargo_routes: Array = []
+var factory_ore_stock := 0
+var town_food_stock: Array[int] = [0, 0, 0, 0, 0]
+var town_goods_stock: Array[int] = [0, 0, 0, 0, 0]
+var delivered_food_total := 0
+var delivered_ore_total := 0
+var delivered_goods_total := 0
 
 func _ready() -> void:
 	_build_world()
@@ -117,19 +124,24 @@ func _build_production_network() -> void:
 	for spec in specs:
 		var hub := _add_detailed_building(String(spec[0]), spec[2], spec[3], spec[4])
 		production_sites.append({"name": spec[0], "kind": spec[1], "stock": 0, "node": hub})
-	route_points = [Vector3(0, 0, 0), Vector3(28, 0, 8), Vector3(48, 0, 30), Vector3(62, 0, 54)]
-	for i in range(route_points.size() - 1):
-		var start: Vector3 = route_points[i]
-		var finish: Vector3 = route_points[i + 1]
-		var direction := finish - start
-		var road := _add_box("Intercity trade road", (start + finish) * 0.5 + Vector3(0, -0.05, 0), Vector3(3.2, 0.12, direction.length()), Color(0.14, 0.15, 0.17))
-		road.rotation.y = atan2(direction.x, direction.z)
+	cargo_routes = [
+		[Vector3(34, 0, 8), Vector3(16, 0, 4), Vector3(0, 0, 0)],
+		[Vector3(-8, 0, -37), Vector3(-22, 0, -22), Vector3(-37, 0, -5)],
+		[Vector3(-37, 0, -5), Vector3(-12, 0, 14), Vector3(22, 0, 34), Vector3(62, 0, 54)]
+	]
+	for route in cargo_routes:
+		for i in range(route.size() - 1):
+			var start_point: Vector3 = route[i]
+			var end_point: Vector3 = route[i + 1]
+			var direction := end_point - start_point
+			var road := _add_box("Intercity cargo road", (start_point + end_point) * 0.5 + Vector3(0, -0.05, 0), Vector3(3.2, 0.12, direction.length()), Color(0.14, 0.15, 0.17))
+			road.rotation.y = atan2(direction.x, direction.z)
 	for i in range(3):
 		var truck := _create_truck(i)
-		truck.position = route_points[0] + Vector3(0, 0, float(i) * 3.0)
+		truck.position = cargo_routes[i][0]
 		city_root.add_child(truck)
 		city_vehicles.append(truck)
-		route_progress.append(float(i) * 0.08)
+		route_progress.append(0.0)
 
 func _create_truck(index: int) -> Node3D:
 	var truck := Node3D.new()
@@ -329,19 +341,24 @@ func _update_city_life(delta: float) -> void:
 			if person.position.z > 48.0:
 				person.position.z = -48.0
 	for i in range(city_vehicles.size()):
-		var car := city_vehicles[i]
-		if is_instance_valid(car):
-			if i < route_progress.size() and route_points.size() > 1:
-				route_progress[i] = fposmod(route_progress[i] + delta * 0.018, 1.0)
-				var progress := route_progress[i] * float(route_points.size() - 1)
-				var segment := mini(int(progress), route_points.size() - 2)
-				var destination: Vector3 = route_points[segment].lerp(route_points[segment + 1], progress - float(segment))
-				car.position = destination + Vector3(0, 0, float(i % 3) * 2.6)
-				car.look_at(route_points[segment + 1], Vector3.UP)
-			else:
-				car.position.x += delta * 2.5
-				if car.position.x > 52.0:
-					car.position.x = -52.0
+		var vehicle := city_vehicles[i]
+		if not is_instance_valid(vehicle):
+			continue
+		if i < cargo_routes.size():
+			var route: Array = cargo_routes[i]
+			var old_progress := route_progress[i]
+			route_progress[i] = fposmod(old_progress + delta * 0.012, 1.0)
+			if route_progress[i] < old_progress:
+				_deliver_cargo(i)
+			var scaled_progress := route_progress[i] * float(route.size() - 1)
+			var segment := mini(int(scaled_progress), route.size() - 2)
+			var point: Vector3 = route[segment].lerp(route[segment + 1], scaled_progress - float(segment))
+			vehicle.position = point
+			vehicle.look_at(route[segment + 1], Vector3.UP)
+		else:
+			vehicle.position.x += delta * 2.5
+			if vehicle.position.x > 52.0:
+				vehicle.position.x = -52.0
 	economy_clock += delta
 	if economy_clock >= 8.0:
 		economy_clock = 0.0
@@ -361,22 +378,26 @@ func _update_city_life(delta: float) -> void:
 		var health_coverage := mini(100, 25 + int(service_levels["health"]) * 25)
 		var education_coverage := mini(100, 20 + int(service_levels["education"]) * 25)
 		var food_produced := 8 + shop_count * 3
-		var ore_produced := 0
 		var factory_goods := 0
-		for site in production_sites:
+		for site_index in range(production_sites.size()):
+			var site: Dictionary = production_sites[site_index]
 			match String(site.get("kind", "")):
 				"food":
 					food_produced += 18
-					site["stock"] = int(site.get("stock", 0)) + 18
+					site["stock"] = mini(300, int(site.get("stock", 0)) + 18)
 				"ore":
-					ore_produced += 12
-					site["stock"] = int(site.get("stock", 0)) + 12
+					site["stock"] = mini(300, int(site.get("stock", 0)) + 12)
 				"goods":
-					factory_goods += mini(14, 4 + ore_produced)
-					site["stock"] = int(site.get("stock", 0)) + mini(14, 4 + ore_produced)
-		var goods_produced := 5 + shop_count * 4 + office_count * 2 + factory_goods
+					factory_goods = mini(14, factory_ore_stock)
+					factory_ore_stock -= factory_goods
+					site["stock"] = mini(300, int(site.get("stock", 0)) + factory_goods)
+			production_sites[site_index] = site
+		var goods_produced := 5 + shop_count * 4 + office_count * 2
 		food_stock = clampi(food_stock + food_produced - population * 2, 0, 500)
 		goods_stock = clampi(goods_stock + goods_produced - population, 0, 500)
+		for town_index in range(5):
+			town_food_stock[town_index] = maxi(0, town_food_stock[town_index] - 3)
+			town_goods_stock[town_index] = maxi(0, town_goods_stock[town_index] - 2)
 		var food_shortage := food_stock < 20
 		var goods_shortage := goods_stock < 15
 		for i in range(citizen_needs.size()):
@@ -413,6 +434,34 @@ func _update_city_life(delta: float) -> void:
 		var daylight := (sin(world_clock / 180.0 * TAU - PI / 2.0) + 1.0) * 0.5
 		sun_light.rotation_degrees = Vector3(-15.0 - daylight * 55.0, -30.0, 0.0)
 		sun_light.light_energy = 0.18 + daylight * 1.35
+
+func _deliver_cargo(truck_index: int) -> void:
+	if production_sites.size() < 3:
+		return
+	if truck_index == 0:
+		var farm: Dictionary = production_sites[0]
+		var food_load := mini(30, int(farm.get("stock", 0)))
+		farm["stock"] = int(farm.get("stock", 0)) - food_load
+		production_sites[0] = farm
+		food_stock = clampi(food_stock + food_load, 0, 500)
+		delivered_food_total += food_load
+		status_label.text = "Farm truck delivered %d food to the capital." % food_load
+	elif truck_index == 1:
+		var mine: Dictionary = production_sites[1]
+		var ore_load := mini(24, int(mine.get("stock", 0)))
+		mine["stock"] = int(mine.get("stock", 0)) - ore_load
+		production_sites[1] = mine
+		factory_ore_stock = mini(200, factory_ore_stock + ore_load)
+		delivered_ore_total += ore_load
+		status_label.text = "Mine truck delivered %d ore to the factory." % ore_load
+	elif truck_index == 2:
+		var factory: Dictionary = production_sites[2]
+		var goods_load := mini(24, int(factory.get("stock", 0)))
+		factory["stock"] = int(factory.get("stock", 0)) - goods_load
+		production_sites[2] = factory
+		town_goods_stock[0] = mini(500, town_goods_stock[0] + goods_load)
+		delivered_goods_total += goods_load
+		status_label.text = "Factory truck delivered %d goods to the neighbouring town." % goods_load
 
 func _select_building(kind: int) -> void:
 	selected_building = kind
@@ -735,4 +784,4 @@ func _load_game() -> void:
 func _update_ui() -> void:
 	if stats_label:
 		var service_summary := "Water %d | Power %d | Health %d | School %d" % [service_levels["water"], service_levels["power"], service_levels["health"], service_levels["education"]]
-		stats_label.text = "Coins: %d\nSoldiers: %d\nSupplies: %d\nDistricts captured: %d/5\nServices: %s\nPeople: %d | Happiness: %d%%\nFood: %d | Goods: %d\nCycle: +%d / -%d | Trade: +%d" % [coins, soldiers, supplies, captured, service_summary, city_citizens.size(), city_happiness, food_stock, goods_stock, last_economy_income, last_economy_expense, last_trade_income]
+		stats_label.text = "Coins: %d\nSoldiers: %d\nSupplies: %d\nDistricts captured: %d/5\nServices: %s\nPeople: %d | Happiness: %d%%\nCapital food: %d | Goods: %d | Factory ore: %d\nDelivered F/O/G: %d/%d/%d\nTown 1 stocks: F%d G%d\nCycle: +%d / -%d | Trade: +%d" % [coins, soldiers, supplies, captured, service_summary, city_citizens.size(), city_happiness, food_stock, goods_stock, factory_ore_stock, delivered_food_total, delivered_ore_total, delivered_goods_total, town_food_stock[0], town_goods_stock[0], last_economy_income, last_economy_expense, last_trade_income]
