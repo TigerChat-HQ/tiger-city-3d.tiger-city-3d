@@ -37,8 +37,9 @@ var city_vehicles: Array[Node3D] = []
 var economy_clock := 0.0
 var world_clock := 0.0
 var sun_light: DirectionalLight3D
-var service_levels := {"water": 0, "power": 0, "health": 0, "education": 0}
-var service_costs := {"water": 350, "power": 450, "health": 600, "education": 500}
+var service_levels := {"water": 0, "power": 0, "health": 0, "education": 0, "police": 0, "fire": 0}
+var service_costs := {"water": 350, "power": 450, "health": 600, "education": 500, "police": 550, "fire": 500}
+var emergency_incidents := 0
 var last_economy_income := 0
 var last_economy_expense := 0
 var food_stock := 180
@@ -195,8 +196,8 @@ func _build_service(service_name: String) -> void:
 		return
 	coins -= cost
 	service_levels[service_name] = int(service_levels[service_name]) + 1
-	var service_positions := {"water": Vector3(-18, 2.5, 18), "power": Vector3(18, 3, 18), "health": Vector3(-18, 3.5, -18), "education": Vector3(18, 3, -18)}
-	var service_colors := {"water": Color(0.16, 0.48, 0.78), "power": Color(0.88, 0.72, 0.18), "health": Color(0.78, 0.22, 0.24), "education": Color(0.28, 0.62, 0.38)}
+	var service_positions := {"water": Vector3(-18, 2.5, 18), "power": Vector3(18, 3, 18), "health": Vector3(-18, 3.5, -18), "education": Vector3(18, 3, -18), "police": Vector3(-30, 3, 0), "fire": Vector3(30, 3, 0)}
+	var service_colors := {"water": Color(0.16, 0.48, 0.78), "power": Color(0.88, 0.72, 0.18), "health": Color(0.78, 0.22, 0.24), "education": Color(0.28, 0.62, 0.38), "police": Color(0.12, 0.24, 0.72), "fire": Color(0.92, 0.28, 0.08)}
 	var height := 5.0 + float(service_levels[service_name])
 	var service_node: MeshInstance3D = service_nodes.get(service_name)
 	if is_instance_valid(service_node):
@@ -385,6 +386,8 @@ func _update_city_life(delta: float) -> void:
 		var power_coverage := mini(100, 35 + int(service_levels["power"]) * 20)
 		var health_coverage := mini(100, 25 + int(service_levels["health"]) * 25)
 		var education_coverage := mini(100, 20 + int(service_levels["education"]) * 25)
+		var police_coverage := mini(100, int(service_levels["police"]) * 30)
+		var fire_coverage := mini(100, int(service_levels["fire"]) * 30)
 		var food_produced := 8 + shop_count * 3
 		var factory_goods := 0
 		for site_index in range(production_sites.size()):
@@ -425,6 +428,14 @@ func _update_city_life(delta: float) -> void:
 			happiness_total += float(needs["happiness"])
 		if citizen_needs.size() > 0:
 			city_happiness = int(happiness_total / citizen_needs.size())
+		if randf() < 0.12:
+			var fire_event := randf() < 0.5
+			var response_coverage := fire_coverage if fire_event else police_coverage
+			var incident_loss := maxi(0, 180 - response_coverage * 2)
+			coins -= incident_loss
+			city_happiness = maxi(0, city_happiness - (2 if response_coverage >= 60 else 6))
+			emergency_incidents += 1
+			status_label.text = ("Fire emergency handled by the fire service." if fire_event else "Security incident handled by the police.") if response_coverage >= 60 else ("Fire emergency! Upgrade the fire station." if fire_event else "Security incident! Upgrade the police station.")
 		var business_income := 10 + shop_count * 18 + office_count * 28
 		var taxes := int(population * (0.5 + float(city_happiness) / 100.0))
 		last_trade_income = 0
@@ -756,7 +767,7 @@ func _save_game() -> void:
 	var saved_production: Array[Dictionary] = []
 	for site in production_sites:
 		saved_production.append({"kind": site.get("kind", ""), "stock": int(site.get("stock", 0))})
-	var data := {"coins": coins, "soldiers": soldiers, "supplies": supplies, "captured": captured, "buildings": saved_buildings, "service_levels": service_levels, "food_stock": food_stock, "goods_stock": goods_stock, "city_happiness": city_happiness, "citizen_needs": citizen_needs, "factory_ore_stock": factory_ore_stock, "town_food_stock": town_food_stock, "town_goods_stock": town_goods_stock, "production_stocks": saved_production}
+	var data := {"coins": coins, "soldiers": soldiers, "supplies": supplies, "captured": captured, "buildings": saved_buildings, "service_levels": service_levels, "food_stock": food_stock, "goods_stock": goods_stock, "city_happiness": city_happiness, "citizen_needs": citizen_needs, "emergency_incidents": emergency_incidents, "factory_ore_stock": factory_ore_stock, "town_food_stock": town_food_stock, "town_goods_stock": town_goods_stock, "production_stocks": saved_production}
 	var file := FileAccess.open(SAVE_PATH, FileAccess.WRITE)
 	if file == null:
 		status_label.text = "Could not save the game on this device."
@@ -802,6 +813,7 @@ func _load_game() -> void:
 		site["stock"] = maxi(0, int(saved_site.get("stock", 0)))
 		production_sites[site_index] = site
 	city_happiness = clampi(int(parsed.get("city_happiness", 72)), 0, 100)
+	emergency_incidents = maxi(0, int(parsed.get("emergency_incidents", 0)))
 	var saved_needs: Array = parsed.get("citizen_needs", [])
 	for i in range(mini(citizen_needs.size(), saved_needs.size())):
 		if saved_needs[i] is Dictionary:
@@ -822,5 +834,5 @@ func _load_game() -> void:
 
 func _update_ui() -> void:
 	if stats_label:
-		var service_summary := "Water %d | Power %d | Health %d | School %d" % [service_levels["water"], service_levels["power"], service_levels["health"], service_levels["education"]]
-		stats_label.text = "Coins: %d\nSoldiers: %d\nSupplies: %d\nDistricts captured: %d/5\nServices: %s\nPeople: %d | Happiness: %d%%\nCapital food: %d | Goods: %d | Factory ore: %d\nDelivered F/O/G: %d/%d/%d\nTown 1 stocks: F%d G%d\nCycle: +%d / -%d | Trade: +%d" % [coins, soldiers, supplies, captured, service_summary, city_citizens.size(), city_happiness, food_stock, goods_stock, factory_ore_stock, delivered_food_total, delivered_ore_total, delivered_goods_total, town_food_stock[0], town_goods_stock[0], last_economy_income, last_economy_expense, last_trade_income]
+		var service_summary := "Water %d | Power %d | Health %d | School %d | Police %d | Fire %d" % [service_levels["water"], service_levels["power"], service_levels["health"], service_levels["education"], service_levels["police"], service_levels["fire"]]
+		stats_label.text = "Coins: %d\nSoldiers: %d\nSupplies: %d\nDistricts captured: %d/5\nServices: %s\nPeople: %d | Happiness: %d%%\nEmergency incidents: %d\nCapital food: %d | Goods: %d | Factory ore: %d\nDelivered F/O/G: %d/%d/%d\nTown 1 stocks: F%d G%d\nCycle: +%d / -%d | Trade: +%d" % [coins, soldiers, supplies, captured, service_summary, city_citizens.size(), city_happiness, emergency_incidents, food_stock, goods_stock, factory_ore_stock, delivered_food_total, delivered_ore_total, delivered_goods_total, town_food_stock[0], town_goods_stock[0], last_economy_income, last_economy_expense, last_trade_income]
