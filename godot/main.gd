@@ -37,6 +37,10 @@ var city_vehicles: Array[Node3D] = []
 var economy_clock := 0.0
 var world_clock := 0.0
 var sun_light: DirectionalLight3D
+var service_levels := {"water": 0, "power": 0, "health": 0, "education": 0}
+var service_costs := {"water": 350, "power": 450, "health": 600, "education": 500}
+var last_economy_income := 0
+var last_economy_expense := 0
 
 func _ready() -> void:
 	_build_world()
@@ -65,6 +69,7 @@ func _build_world() -> void:
 	for i in range(5):
 		var angle := TAU * float(i) / 5.0
 		_add_box("Rival district", Vector3(cos(angle) * 62.0, 2.0, sin(angle) * 62.0), Vector3(9, 4, 9), Color(0.62, 0.18, 0.15))
+	_build_neighbor_cities()
 	_add_box("Capital", Vector3(0, 3, 0), Vector3(12, 6, 12), Color(0.82, 0.64, 0.22))
 	sun_light = DirectionalLight3D.new()
 	sun_light.rotation_degrees = Vector3(-52, -30, 0)
@@ -75,6 +80,37 @@ func _build_world() -> void:
 	add_child(camera)
 	_spawn_city_life()
 
+func _build_neighbor_cities() -> void:
+	var palettes := [[Color(0.68, 0.42, 0.22), Color(0.78, 0.66, 0.42)], [Color(0.24, 0.48, 0.38), Color(0.54, 0.68, 0.48)], [Color(0.34, 0.42, 0.62), Color(0.62, 0.68, 0.78)], [Color(0.58, 0.32, 0.26), Color(0.78, 0.54, 0.38)], [Color(0.48, 0.42, 0.58), Color(0.72, 0.66, 0.78)]]
+	for city_index in range(5):
+		var angle := TAU * float(city_index) / 5.0
+		var center := Vector3(cos(angle) * 62.0, 0.0, sin(angle) * 62.0)
+		var palette: Array = palettes[city_index]
+		_add_box("Town plaza %d" % city_index, center, Vector3(22, 0.25, 22), Color(0.28, 0.30, 0.27))
+		for building_index in range(7):
+			var ring := float(building_index / 4)
+			var slot := float(building_index % 4)
+			var height := 4.0 + float((building_index * 3 + city_index) % 5) * 1.8
+			var tint: Color = palette[building_index % 2]
+			var local_pos := Vector3((slot - 1.5) * 5.0, height * 0.5, (ring - 0.5) * 8.0)
+			_add_box("Town %d building %d" % [city_index, building_index], center + local_pos, Vector3(3.8, height, 4.2), tint)
+		_add_box("Town %d landmark" % city_index, center + Vector3(0, 5.5, 0), Vector3(5, 11, 5), palette[1])
+
+func _build_service(service_name: String) -> void:
+	if not service_levels.has(service_name):
+		return
+	var cost := int(service_costs[service_name]) * (int(service_levels[service_name]) + 1)
+	if coins < cost:
+		status_label.text = "Not enough coins. Upgrade costs %d." % cost
+		return
+	coins -= cost
+	service_levels[service_name] = int(service_levels[service_name]) + 1
+	var service_positions := {"water": Vector3(-18, 2.5, 18), "power": Vector3(18, 3, 18), "health": Vector3(-18, 3.5, -18), "education": Vector3(18, 3, -18)}
+	var service_colors := {"water": Color(0.16, 0.48, 0.78), "power": Color(0.88, 0.72, 0.18), "health": Color(0.78, 0.22, 0.24), "education": Color(0.28, 0.62, 0.38)}
+	var height := 5.0 + float(service_levels[service_name])
+	_add_box(service_name.capitalize() + " service", service_positions[service_name], Vector3(5, height, 5), service_colors[service_name])
+	status_label.text = "%s service upgraded to level %d." % [service_name.capitalize(), service_levels[service_name]]
+	_update_ui()
 func _add_box(label: String, pos: Vector3, size: Vector3, tint: Color) -> MeshInstance3D:
 	var mesh := BoxMesh.new()
 	mesh.size = size
@@ -125,6 +161,11 @@ func _build_ui() -> void:
 	attack.text = "ATTACK NEIGHBOUR (-15)"
 	attack.pressed.connect(_attack)
 	column.add_child(attack)
+	for service_name in ["water", "power", "health", "education"]:
+		var service_button := Button.new()
+		service_button.text = "UPGRADE " + service_name.to_upper()
+		service_button.pressed.connect(func(): _build_service(service_name))
+		column.add_child(service_button)
 	var save_button := Button.new()
 	save_button.text = "SAVE GAME"
 	save_button.pressed.connect(_save_game)
@@ -187,8 +228,15 @@ func _update_city_life(delta: float) -> void:
 				shop_count += 1
 			elif int(entry.get("kind", -1)) == 2:
 				office_count += 1
-		var income := 10 + shop_count * 18 + office_count * 28
-		coins += income
+		var service_total := 0
+		for level in service_levels.values():
+			service_total += int(level)
+		var income := 10 + shop_count * 18 + office_count * 28 + service_total * 4
+		var maintenance := buildings.size() * 2 + service_total * 7
+		var taxes := city_citizens.size() + service_total * 3
+		last_economy_income = income + taxes
+		last_economy_expense = maintenance
+		coins += last_economy_income - last_economy_expense
 		if supplies < 200:
 			supplies += 1
 		_update_ui()
@@ -466,7 +514,7 @@ func _save_game() -> void:
 	for entry in buildings:
 		var p: Vector3 = entry.position
 		saved_buildings.append({"x": p.x, "z": p.z, "kind": entry.kind})
-	var data := {"coins": coins, "soldiers": soldiers, "supplies": supplies, "captured": captured, "buildings": saved_buildings}
+	var data := {"coins": coins, "soldiers": soldiers, "supplies": supplies, "captured": captured, "buildings": saved_buildings, "service_levels": service_levels}
 	var file := FileAccess.open(SAVE_PATH, FileAccess.WRITE)
 	if file == null:
 		status_label.text = "Could not save the game on this device."
@@ -492,6 +540,9 @@ func _load_game() -> void:
 	soldiers = int(parsed.get("soldiers", 24))
 	supplies = int(parsed.get("supplies", 100))
 	captured = int(parsed.get("captured", 0))
+	var saved_services: Dictionary = parsed.get("service_levels", {})
+	for service_name in service_levels.keys():
+		service_levels[service_name] = maxi(0, int(saved_services.get(service_name, 0)))
 	for item in buildings:
 		var node = item.get("node")
 		if is_instance_valid(node):
@@ -508,4 +559,5 @@ func _load_game() -> void:
 
 func _update_ui() -> void:
 	if stats_label:
-		stats_label.text = "Coins: %d\nSoldiers: %d\nSupplies: %d\nDistricts captured: %d/5" % [coins, soldiers, supplies, captured]
+		var service_summary := "Water %d | Power %d | Health %d | School %d" % [service_levels["water"], service_levels["power"], service_levels["health"], service_levels["education"]]
+		stats_label.text = "Coins: %d\nSoldiers: %d\nSupplies: %d\nDistricts captured: %d/5\nServices: %s\nLast cycle: +%d / -%d" % [coins, soldiers, supplies, captured, service_summary, last_economy_income, last_economy_expense]
