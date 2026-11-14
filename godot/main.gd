@@ -47,6 +47,9 @@ var city_happiness := 72
 var citizen_needs: Array[Dictionary] = []
 var last_trade_income := 0
 var service_nodes: Dictionary = {}
+var production_sites: Array[Dictionary] = []
+var route_points: Array[Vector3] = []
+var route_progress: Array[float] = []
 
 func _ready() -> void:
 	_build_world()
@@ -78,6 +81,7 @@ func _build_world() -> void:
 		var angle := TAU * float(i) / 5.0
 		_add_box("Rival district", Vector3(cos(angle) * 62.0, 2.0, sin(angle) * 62.0), Vector3(9, 4, 9), Color(0.62, 0.18, 0.15))
 	_build_neighbor_cities()
+	_build_production_network()
 	_add_box("Capital", Vector3(0, 3, 0), Vector3(12, 6, 12), Color(0.82, 0.64, 0.22))
 	sun_light = DirectionalLight3D.new()
 	sun_light.rotation_degrees = Vector3(-52, -30, 0)
@@ -103,6 +107,46 @@ func _build_neighbor_cities() -> void:
 			var local_pos := Vector3((slot - 1.5) * 5.0, height * 0.5, (ring - 0.5) * 8.0)
 			_add_detailed_building("Town %d building %d" % [city_index, building_index], center + local_pos, Vector3(3.8, height, 4.2), tint)
 		_add_detailed_building("Town %d landmark" % city_index, center + Vector3(0, 5.5, 0), Vector3(5, 11, 5), palette[1])
+
+func _build_production_network() -> void:
+	var specs := [
+		["Farm", "food", Vector3(34, 1, 8), Vector3(10, 2, 8), Color(0.34, 0.56, 0.22)],
+		["Mine", "ore", Vector3(-8, 1.2, -37), Vector3(9, 2.4, 9), Color(0.42, 0.43, 0.45)],
+		["Factory", "goods", Vector3(-37, 1.8, -5), Vector3(12, 3.6, 10), Color(0.48, 0.52, 0.58)]
+	]
+	for spec in specs:
+		var hub := _add_detailed_building(String(spec[0]), spec[2], spec[3], spec[4])
+		production_sites.append({"name": spec[0], "kind": spec[1], "stock": 0, "node": hub})
+	route_points = [Vector3(0, 0, 0), Vector3(28, 0, 8), Vector3(48, 0, 30), Vector3(62, 0, 54)]
+	for i in range(3):
+		var truck := _create_truck(i)
+		truck.position = route_points[0] + Vector3(0, 0, float(i) * 3.0)
+		city_root.add_child(truck)
+		city_vehicles.append(truck)
+		route_progress.append(float(i) * 0.08)
+
+func _create_truck(index: int) -> Node3D:
+	var truck := Node3D.new()
+	var paint := [Color(0.72, 0.18, 0.12), Color(0.16, 0.36, 0.68), Color(0.72, 0.62, 0.30)][index % 3]
+	var body := _add_box("Truck body", Vector3.ZERO, Vector3(2.8, 0.75, 1.45), paint)
+	truck.add_child(body)
+	var cabin := _add_box("Truck cabin", Vector3(0.75, 0.7, 0), Vector3(1.05, 0.82, 1.35), Color(0.12, 0.25, 0.32))
+	truck.add_child(cabin)
+	for x in [-0.9, 0.9]:
+		for z in [-0.82, 0.82]:
+			var wheel := MeshInstance3D.new()
+			var wheel_mesh := CylinderMesh.new()
+			wheel_mesh.top_radius = 0.34
+			wheel_mesh.bottom_radius = 0.34
+			wheel_mesh.height = 0.22
+			wheel.mesh = wheel_mesh
+			wheel.rotation_degrees.z = 90
+			wheel.position = Vector3(x, -0.25, z)
+			var rubber := StandardMaterial3D.new()
+			rubber.albedo_color = Color(0.035, 0.04, 0.045)
+			wheel.material_override = rubber
+			truck.add_child(wheel)
+	return truck
 
 func _build_service(service_name: String) -> void:
 	if not service_levels.has(service_name):
@@ -226,26 +270,32 @@ func _build_ui() -> void:
 func _spawn_city_life() -> void:
 	# Lightweight placeholder pedestrians and traffic make the city feel inhabited.
 	for i in range(14):
-		var person := MeshInstance3D.new()
+		var person := Node3D.new()
 		var shape := CapsuleMesh.new()
 		shape.radius = 0.22
 		shape.height = 1.25
-		person.mesh = shape
+		var torso := MeshInstance3D.new()
+		torso.mesh = shape
+		torso.position.y = 0.35
+		person.add_child(torso)
 		var material := StandardMaterial3D.new()
 		material.albedo_color = [Color(0.75, 0.38, 0.22), Color(0.18, 0.42, 0.68), Color(0.68, 0.62, 0.42)][i % 3]
-		person.material_override = material
+		torso.material_override = material
+		var head := MeshInstance3D.new()
+		var head_shape := SphereMesh.new()
+		head_shape.radius = 0.19
+		head_shape.height = 0.38
+		head.mesh = head_shape
+		head.position.y = 1.0
+		head.material_override = material
+		person.add_child(head)
 		person.position = Vector3(-33.0 + float(i % 7) * 11.0, 0.72, -42.0 + float(i) * 6.0)
 		city_root.add_child(person)
 		city_citizens.append(person)
 		citizen_needs.append({"hunger": 0.0, "health": 80.0, "education": 20.0, "happiness": 72.0})
-	for i in range(8):
-		var car := MeshInstance3D.new()
-		var shape := BoxMesh.new()
-		shape.size = Vector3(2.5, 0.9, 1.35)
-		car.mesh = shape
-		var material := StandardMaterial3D.new()
-		material.albedo_color = [Color(0.72, 0.16, 0.12), Color(0.12, 0.28, 0.62), Color(0.78, 0.72, 0.48), Color(0.16, 0.17, 0.18)][i % 4]
-		car.material_override = material
+	for i in range(5):
+		var car := _create_truck(i)
+		car.scale = Vector3(0.62, 0.62, 0.62)
 		car.position = Vector3(-48.0 + float(i) * 12.0, 0.58, [-33.0, -22.0, -11.0, 0.0, 11.0, 22.0, 33.0, 0.0][i])
 		city_root.add_child(car)
 		city_vehicles.append(car)
@@ -260,9 +310,17 @@ func _update_city_life(delta: float) -> void:
 	for i in range(city_vehicles.size()):
 		var car := city_vehicles[i]
 		if is_instance_valid(car):
-			car.position.x += delta * (3.0 + float(i % 3) * 0.7)
-			if car.position.x > 52.0:
-				car.position.x = -52.0
+			if i < route_progress.size() and route_points.size() > 1:
+				route_progress[i] = fposmod(route_progress[i] + delta * 0.018, 1.0)
+				var progress := route_progress[i] * float(route_points.size() - 1)
+				var segment := mini(int(progress), route_points.size() - 2)
+				var destination: Vector3 = route_points[segment].lerp(route_points[segment + 1], progress - float(segment))
+				car.position = destination + Vector3(0, 0, float(i % 3) * 2.6)
+				car.look_at(route_points[segment + 1], Vector3.UP)
+			else:
+				car.position.x += delta * 2.5
+				if car.position.x > 52.0:
+					car.position.x = -52.0
 	economy_clock += delta
 	if economy_clock >= 8.0:
 		economy_clock = 0.0
@@ -281,8 +339,21 @@ func _update_city_life(delta: float) -> void:
 		var power_coverage := mini(100, 35 + int(service_levels["power"]) * 20)
 		var health_coverage := mini(100, 25 + int(service_levels["health"]) * 25)
 		var education_coverage := mini(100, 20 + int(service_levels["education"]) * 25)
-		var food_produced := 8 + shop_count * 9
-		var goods_produced := 5 + shop_count * 7 + office_count * 2
+		var food_produced := 8 + shop_count * 3
+		var ore_produced := 0
+		var factory_goods := 0
+		for site in production_sites:
+			match String(site.get("kind", "")):
+				"food":
+					food_produced += 18
+					site["stock"] = int(site.get("stock", 0)) + 18
+				"ore":
+					ore_produced += 12
+					site["stock"] = int(site.get("stock", 0)) + 12
+				"goods":
+					factory_goods += mini(14, 4 + ore_produced)
+					site["stock"] = int(site.get("stock", 0)) + mini(14, 4 + ore_produced)
+		var goods_produced := 5 + shop_count * 4 + office_count * 2 + factory_goods
 		food_stock = clampi(food_stock + food_produced - population * 2, 0, 500)
 		goods_stock = clampi(goods_stock + goods_produced - population, 0, 500)
 		var food_shortage := food_stock < 20
