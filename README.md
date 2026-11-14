@@ -12,42 +12,32 @@ A realistic 3D city-building game targeting Android.
 - Procedural greybox city grid with roads, ground, buildings, sun lighting, and a camera.
 - First building loop: choose a house, shop, or office; tap open ground to place it; coins are deducted.
 - Local save/load uses Unity PlayerPrefs JSON.
+- A starter Unity scene and bootstrap script now attach the prototype city/build/campaign controllers at runtime.
+- An Android APK GitHub Actions workflow is included; it requires valid Unity license secrets before it can run successfully.
 - This is an early prototype, not a finished realistic game.
 
-## Unity scene setup
-1. Create a Unity 3D project.
-2. Add an empty GameObject named `CityRoot` to a scene.
-3. Add `CityPrototype`, `CityBuildController`, and `TerritoryCampaignController` components to `CityRoot`.
-4. Ensure the scene has a camera tagged `MainCamera`, or let `CityPrototype` create one.
-5. Press Play. Select a building from the bottom toolbar and tap open ground to place it.
-6. Use SAVE and LOAD to test local city persistence. The campaign panel lets you recruit soldiers, select rival regions, spend supplies, launch an invasion, and save captured territories locally.
+## Unity scene
+Open `Assets/Scenes/TigerCityPrototype.unity` with Unity `6000.3.28f1`. The scene's `TigerCityBootstrap` adds `CityPrototype`, `CityBuildController`, and `TerritoryCampaignController` to its root object. Press Play to generate the greybox city. The camera is created by the city prototype.
 
 ## Known limitations
 - The current visuals use built-in primitive geometry and the legacy Standard shader. They are greybox placeholders, not photorealistic assets.
-- The first touch interaction uses Unity's legacy mouse input mapping; the final Android input system must be configured and device-tested.
+- The first touch interaction uses Unity's legacy mouse input mapping; Android touch behavior must be tested on a device.
 - `CityOrbitCamera` adds one-finger orbit, two-finger pinch zoom and two-finger pan; desktop editor mouse drag/wheel are also supported.
 - The camera requests landscape-only autorotation (both landscape directions) when gameplay starts; device behavior still needs Android build and device verification.
-- The territory campaign is an early greybox: battles currently resolve from troop strength and random battle factors; the battlefield units and cover are visual placeholders, not yet controllable real-time combat.
-- No complete Unity project scaffold, production assets, online multiplayer backend, or verified Android APK is included yet.
-- Unity Editor is pinned to Unity 6.3 (`6000.3.28f1`) for the initial cloud-build setup; confirm this editor release is available in the Unity Build Automation dashboard before the first build.
+- The territory campaign is an early greybox: battles currently resolve from troop strength and random battle factors; battlefield units and cover are visual placeholders, not yet controllable real-time combat.
+- No production assets, online multiplayer backend, verified Android APK, or successful Unity compilation is included yet.
 
-## Project structure
-- `Assets/Scripts/` contains prototype gameplay scripts, including the first territory campaign and invasion loop, plus the mobile orbit camera.
-- `Assets/_Project/Scenes/` is reserved for production scenes.
-- `Assets/_Project/Art/` contains models and textures.
-- `Assets/_Project/Materials/`, `Prefabs/`, `UI/`, `Audio/`, and `Settings/` organize production assets.
-- `Packages/manifest.json` defines Unity Package Manager dependencies.
-- `ProjectSettings/ProjectVersion.txt` pins the editor version for cloud auto-detection.
+## Android APK build with GitHub Actions
+Workflow: `.github/workflows/android-build.yml`.
 
-## Android cloud build path
-1. Open the Unity Cloud Dashboard and select this Unity project.
-2. Open DevOps > Build Automation > Settings > Source control.
-3. Select GitHub and authorize repository access. This repository is public, so read-only access is sufficient for a manual build; auto-build needs repository webhook permission.
-4. Save the source-control settings, then create a build configuration for the `main` branch.
-5. Choose Android, select Unity `6000.3.28f1` (or the exact version confirmed in the dashboard), and configure an APK build rather than an Android App Bundle for direct phone installation.
-6. Start a build and check Build history. Download/install only after the build reports success.
+Before running it, add these repository Actions secrets under **Settings → Secrets and variables → Actions**:
+- `UNITY_LICENSE`: the Unity license file contents for the account/license permitted to use this project.
+- `UNITY_EMAIL`: Unity account email.
+- `UNITY_PASSWORD`: Unity account password (only if required by the selected GameCI licensing flow).
 
-Cloud build is not yet configured or tested. The project still needs a real Unity scene and a successful Unity import/compile before an APK can be expected.
+Then open **Actions → Unity Android APK → Run workflow** on branch `feat/city-invasion-strategy`. The workflow targets Android APK (not AAB) using Unity `6000.3.28f1` and uploads the APK as a workflow artifact if the build succeeds. Do not publish the license or credentials in repository files or chat.
+
+If the Unity license is not valid for the runner, the selected Unity editor version is unavailable, or Unity reports project/import/compiler errors, the workflow will fail and its logs must be reviewed before retrying.
 
 ## Validation status
-Source files have been committed to GitHub. No Unity compilation, Play Mode test, Android device test, or APK build has been run yet.
+The initial scene/build workflow scaffold is committed to the feature branch. No Unity import/compile, Play Mode test, Android device test, or APK build has yet been run. The first CI run is still pending Unity license secrets and verification of the runner's Unity version support.
