@@ -62,12 +62,21 @@ public sealed class TerritoryCampaignController : MonoBehaviour
     private void CreateCampaignMap()
     {
         regions.Clear();
-        regions.Add(CreateRegion("north", "North District", new Vector3(0, 0, 58), 18, false));
-        regions.Add(CreateRegion("east", "Eastern Hills", new Vector3(58, 0, 0), 24, false));
-        regions.Add(CreateRegion("south", "Southern Farms", new Vector3(0, 0, -58), 14, false));
-        regions.Add(CreateRegion("west", "Western Industrial Zone", new Vector3(-58, 0, 0), 28, false));
-        regions.Add(CreateRegion("port", "Coastal Port", new Vector3(42, 0, -42), 32, false));
+        Vector3 capital = GetCapitalCenter();
+        regions.Add(CreateRegion("north", "North District", capital + new Vector3(0, 0, 58), 18, false));
+        regions.Add(CreateRegion("east", "Eastern Hills", capital + new Vector3(58, 0, 0), 24, false));
+        regions.Add(CreateRegion("south", "Southern Farms", capital + new Vector3(0, 0, -58), 14, false));
+        regions.Add(CreateRegion("west", "Western Industrial Zone", capital + new Vector3(-58, 0, 0), 28, false));
+        regions.Add(CreateRegion("port", "Coastal Port", capital + new Vector3(42, 0, -42), 32, false));
         BuildRegionMarkers();
+    }
+
+    private Vector3 GetCapitalCenter()
+    {
+        CityPrototype city = GetComponent<CityPrototype>();
+        if (city == null) return Vector3.zero;
+        float size = city.blocksPerSide * city.blockSize + (city.blocksPerSide + 1) * city.roadWidth;
+        return new Vector3(size * 0.5f, 0f, size * 0.5f);
     }
 
     private Region CreateRegion(string id, string title, Vector3 position, int defenders, bool owned)
@@ -78,7 +87,7 @@ public sealed class TerritoryCampaignController : MonoBehaviour
     private void BuildRegionMarkers()
     {
         ClearCampaignObjects();
-        CreateMarker("Central Capital", Vector3.zero, new Vector3(18, 5, 18), new Color(0.78f, 0.63f, 0.24f));
+        CreateMarker("Central Capital", GetCapitalCenter(), new Vector3(18, 5, 18), new Color(0.78f, 0.63f, 0.24f));
         foreach (Region region in regions)
         {
             Color color = region.owned ? new Color(0.2f, 0.65f, 0.3f) : new Color(0.65f, 0.22f, 0.18f);
