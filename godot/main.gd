@@ -25,6 +25,7 @@ var active_touches: Dictionary = {}
 var touch_start: Vector2
 var touch_moved := false
 var mouse_dragging := false
+var last_touch_gap := 0.0
 var last_pointer := Vector2.ZERO
 
 func _ready() -> void:
@@ -138,6 +139,9 @@ func _unhandled_input(event: InputEvent) -> void:
 			if active_touches.size() == 1:
 				touch_start = touch.position
 				touch_moved = false
+			elif active_touches.size() == 2:
+				var points: Array = active_touches.values()
+				last_touch_gap = points[0].distance_to(points[1])
 		else:
 			active_touches.erase(touch.index)
 			if active_touches.is_empty() and not touch_moved and selected_building >= 0:
@@ -148,7 +152,9 @@ func _unhandled_input(event: InputEvent) -> void:
 		if active_touches.size() >= 2:
 			var points: Array = active_touches.values()
 			var current_gap: float = points[0].distance_to(points[1])
-			camera_distance = clampf(camera_distance - drag.relative.y * 0.12, 38.0, 145.0)
+			if last_touch_gap > 0.0:
+				camera_distance = clampf(camera_distance - (current_gap - last_touch_gap) * 0.12, 38.0, 145.0)
+			last_touch_gap = current_gap
 			touch_moved = true
 		else:
 			yaw -= drag.relative.x * 0.006
@@ -160,6 +166,8 @@ func _unhandled_input(event: InputEvent) -> void:
 		if mouse.button_index == MOUSE_BUTTON_LEFT:
 			mouse_dragging = mouse.pressed
 			last_pointer = mouse.position
+			if mouse.pressed:
+				touch_moved = false
 			if not mouse.pressed and not touch_moved and selected_building >= 0:
 				_try_place_at(mouse.position)
 		elif mouse.button_index == MOUSE_BUTTON_WHEEL_UP and mouse.pressed:
@@ -197,7 +205,7 @@ func _try_place_at(screen_position: Vector2) -> void:
 			status_label.text = "That building site is occupied."
 			return
 	var item := _add_box("Player building", snapped, size, BUILD_COLORS[selected_building])
-	buildings.append({"position": snapped, "kind": selected_building})
+	buildings.append({"position": snapped, "kind": selected_building, "node": item})
 	coins -= BUILD_COSTS[selected_building]
 	status_label.text = "Building placed. Save your city to keep your progress."
 	_update_ui()
@@ -258,7 +266,7 @@ func _load_game() -> void:
 	supplies = int(parsed.get("supplies", 100))
 	captured = int(parsed.get("captured", 0))
 	for item in buildings:
-		var node: Node = item.node
+		var node = item.get("node")
 		if is_instance_valid(node):
 			node.queue_free()
 	buildings.clear()
