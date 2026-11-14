@@ -27,6 +27,11 @@ var touch_moved := false
 var mouse_dragging := false
 var last_touch_gap := 0.0
 var last_pointer := Vector2.ZERO
+var camera_target := Vector3.ZERO
+var battle_root: Node3D
+var battle_units: Array[Dictionary] = []
+var battle_active := false
+var battle_reserve := 0
 
 func _ready() -> void:
 	_build_world()
@@ -80,7 +85,7 @@ func _add_box(label: String, pos: Vector3, size: Vector3, tint: Color) -> MeshIn
 func _update_camera() -> void:
 	if camera == null:
 		return
-	var target := Vector3(0, 0, 0)
+	var target := camera_target
 	var horizontal := camera_distance * cos(pitch)
 	camera.position = target + Vector3(sin(yaw) * horizontal, camera_distance * sin(pitch), cos(yaw) * horizontal)
 	camera.look_at(target, Vector3.UP)
@@ -220,18 +225,173 @@ func _recruit() -> void:
 	_update_ui()
 
 func _attack() -> void:
+	if battle_active:
+		status_label.text = "A battle is already in progress."
+		return
 	if supplies < 15 or soldiers < 8 or captured >= 5:
 		status_label.text = "Need 8 soldiers, 15 supplies, and an uncaptured district."
 		return
 	supplies -= 15
-	var strength := soldiers + randi_range(-8, 8)
-	if strength >= 20 + captured * 3:
+	_start_battle()
+	_update_ui()
+
+func _start_battle() -> void:
+	battle_active = true
+	battle_units.clear()
+	battle_reserve = maxi(0, soldiers - 12)
+	battle_root = Node3D.new()
+	battle_root.name = "LiveBattlefield"
+	add_child(battle_root)
+	var floor_mesh := MeshInstance3D.new()
+	var floor_shape := BoxMesh.new()
+	floor_shape.size = Vector3(48, 0.5, 34)
+	floor_mesh.mesh = floor_shape
+	floor_mesh.position = Vector3(0, -0.3, 0)
+	var floor_material := StandardMaterial3D.new()
+	floor_material.albedo_color = Color(0.24, 0.29, 0.20)
+	floor_mesh.material_override = floor_material
+	battle_root.add_child(floor_mesh)
+	for row in range(5):
+		var line := MeshInstance3D.new()
+		var line_mesh := BoxMesh.new()
+		line_mesh.size = Vector3(0.12, 0.03, 30)
+		line.mesh = line_mesh
+		line.position = Vector3(-20.0 + row * 10.0, 0.0, 0.0)
+		var line_material := StandardMaterial3D.new()
+		line_material.albedo_color = Color(0.55, 0.53, 0.38, 0.45)
+		line_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		line.material_override = line_material
+		battle_root.add_child(line)
+	var deployed := mini(12, soldiers)
+	for i in range(deployed):
+		_spawn_battle_unit(0, i)
+	for i in range(12 + captured * 2):
+		_spawn_battle_unit(1, i)
+	camera_target = Vector3.ZERO
+	camera_distance = 43.0
+	pitch = 0.82
+	yaw = 0.0
+	_update_camera()
+	status_label.text = "Battle started! Watch your soldiers advance and fight."
+	_update_ui()
+
+func _spawn_battle_unit(side: int, index: int) -> void:
+	var unit_node := Node3D.new()
+	unit_node.name = "FriendlySoldier" if side == 0 else "EnemySoldier"
+	var body := MeshInstance3D.new()
+	var body_shape := CapsuleMesh.new()
+	body_shape.radius = 0.38
+	body_shape.height = 1.45
+	body.mesh = body_shape
+	body.position.y = 0.85
+	var body_material := StandardMaterial3D.new()
+	body_material.albedo_color = Color(0.16, 0.34, 0.78) if side == 0 else Color(0.72, 0.16, 0.12)
+	body_material.metallic = 0.18
+	body_material.roughness = 0.62
+	body.material_override = body_material
+	unit_node.add_child(body)
+	var head := MeshInstance3D.new()
+	var head_shape := SphereMesh.new()
+	head_shape.radius = 0.25
+	head_shape.height = 0.5
+	head.mesh = head_shape
+	head.position.y = 1.72
+	var head_material := StandardMaterial3D.new()
+	head_material.albedo_color = Color(0.72, 0.53, 0.39)
+	head.material_override = head_material
+	unit_node.add_child(head)
+	var weapon := MeshInstance3D.new()
+	var weapon_shape := BoxMesh.new()
+	weapon_shape.size = Vector3(0.12, 0.12, 0.9)
+	weapon.mesh = weapon_shape
+	weapon.position = Vector3(0.42, 1.12, -0.1)
+	var weapon_material := StandardMaterial3D.new()
+	weapon_material.albedo_color = Color(0.18, 0.19, 0.20)
+	weapon.material_override = weapon_material
+	unit_node.add_child(weapon)
+	var column := index % 4
+	var row := index / 4
+	var start_x := -16.0 if side == 0 else 16.0
+	unit_node.position = Vector3(start_x, 0.0, float(column - 2) * 2.1 + (float(row) - 1.0) * 0.7)
+	battle_root.add_child(unit_node)
+	battle_units.append({"node": unit_node, "side": side, "hp": 100.0, "cooldown": randf_range(0.1, 0.8), "dead": false})
+
+func _process(delta: float) -> void:
+	if not battle_active:
+		return
+	var friendly_alive := 0
+	var enemy_alive := 0
+	for i in range(battle_units.size()):
+		var unit: Dictionary = battle_units[i]
+		if bool(unit.get("dead", false)):
+			continue
+		var actor: Node3D = unit.get("node")
+		if not is_instance_valid(actor):
+			unit["dead"] = true
+			battle_units[i] = unit
+			continue
+		var side := int(unit.get("side", 0))
+		if side == 0:
+			friendly_alive += 1
+		else:
+			enemy_alive += 1
+		var nearest: Node3D
+		var nearest_distance := INF
+		for opponent in battle_units:
+			if bool(opponent.get("dead", false)) or int(opponent.get("side", 0)) == side:
+				continue
+			var opponent_node: Node3D = opponent.get("node")
+			if not is_instance_valid(opponent_node):
+				continue
+			var distance := actor.position.distance_to(opponent_node.position)
+			if distance < nearest_distance:
+				nearest_distance = distance
+				nearest = opponent_node
+		if nearest == null:
+			continue
+		var cooldown := maxf(0.0, float(unit.get("cooldown", 0.0)) - delta)
+		if nearest_distance > 1.8:
+			var direction := (nearest.position - actor.position).normalized()
+			actor.position += direction * delta * (2.4 if side == 0 else 2.1)
+			actor.look_at(Vector3(nearest.position.x, actor.position.y, nearest.position.z), Vector3.UP)
+		elif cooldown <= 0.0:
+			for j in range(battle_units.size()):
+				var target: Dictionary = battle_units[j]
+				if target.get("node") == nearest and not bool(target.get("dead", false)):
+					target["hp"] = float(target.get("hp", 100.0)) - (14.0 if side == 0 else 11.0)
+					if float(target["hp"]) <= 0.0:
+						target["dead"] = true
+						var target_node: Node3D = target.get("node")
+						if is_instance_valid(target_node):
+							target_node.queue_free()
+					battle_units[j] = target
+					break
+			cooldown = 0.65
+		unit["cooldown"] = cooldown
+		battle_units[i] = unit
+	if enemy_alive == 0 or friendly_alive == 0:
+		_finish_battle(friendly_alive > 0 and enemy_alive == 0)
+
+func _finish_battle(victory: bool) -> void:
+	var survivors := 0
+	for unit in battle_units:
+		if int(unit.get("side", 0)) == 0 and not bool(unit.get("dead", false)):
+			survivors += 1
+	battle_active = false
+	soldiers = battle_reserve + survivors
+	if victory:
 		captured += 1
-		soldiers = maxi(4, soldiers - 5)
-		status_label.text = "Victory! You captured a neighbouring district."
+		status_label.text = "Victory! Your surviving soldiers captured the neighbouring territory."
 	else:
-		soldiers = maxi(2, soldiers - 8)
-		status_label.text = "The invasion failed. Regroup and recruit more soldiers."
+		status_label.text = "Defeat. Your surviving soldiers retreat to the capital."
+	if is_instance_valid(battle_root):
+		battle_root.queue_free()
+	battle_root = null
+	battle_units.clear()
+	camera_target = Vector3.ZERO
+	camera_distance = 95.0
+	pitch = 0.62
+	_update_camera()
 	_update_ui()
 
 func _save_game() -> void:
