@@ -33,8 +33,13 @@ This checklist is evidence-based. A checkmark is added only after the feature is
 - [ ] Optimize graphics, memory, battery, load times, and frame rate for target Android phones.
 - [ ] Complete functional, regression, and physical-device testing before public release.
 
-## Current blocker
-- [ ] The Android APK workflow is not yet passing. Latest inspected run failed at Godot's Android export validation; no verified APK artifact exists.
+## Current progress (partial; not release-complete)
+- [x] Android debug APK export, package ID check, signature verification, and artifact upload succeeded for commit `67c0b11` (artifact is a CI debug build, not a production release).
+- [x] Added initial farm, mine, and factory production hubs.
+- [x] Added visible intercity road segments and moving cargo-truck prototypes.
+- [x] Improved prototype citizen meshes with separate torso and head, and truck meshes with cabin and wheels.
+- [ ] Complete actual cargo pickup, inventory transfer, and town-specific delivery/demand simulation.
+- [ ] Rebuild and verify the Android APK against the latest gameplay changes; latest inspected run is still in progress.
 - [ ] The current prototype is not the finished game and must not be presented as a release build.
 
 ## Release gate
