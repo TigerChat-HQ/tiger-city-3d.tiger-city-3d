@@ -1,0 +1,141 @@
+name: TIGER CITY 3D Android APK
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches:
+      - migration/godot-android-prototype
+    paths:
+      - "godot/**"
+      - ".github/workflows/tiger-city-android.yml"
+  push:
+    branches:
+      - feat/standalone-android-app
+      - migration/godot-android-prototype
+    paths:
+      - "godot/**"
+      - ".github/workflows/tiger-city-android.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  android-apk:
+    runs-on: ubuntu-latest
+    env:
+      ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+      ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+      ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+      ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Install Android SDK packages
+        run: |
+          export ANDROID_HOME="/usr/local/lib/android/sdk"
+          export ANDROID_SDK_ROOT="$ANDROID_HOME"
+          SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          yes | "$SDKMANAGER" --licenses
+          "$SDKMANAGER" "platform-tools" "platforms;android-34" "build-tools;34.0.0" "cmdline-tools;latest" "cmake;3.10.2.4988404" "ndk;23.2.8568313"
+          echo "ANDROID_HOME=$ANDROID_HOME" >> "$GITHUB_ENV"
+          echo "ANDROID_SDK_ROOT=$ANDROID_HOME" >> "$GITHUB_ENV"
+
+      - name: Download Godot 4.4.1 editor and Android export templates
+        run: |
+          curl -L --fail --retry 3 https://github.com/godotengine/godot/releases/download/4.4.1-stable/Godot_v4.4.1-stable_linux.x86_64.zip -o godot.zip
+          curl -L --fail --retry 3 https://github.com/godotengine/godot/releases/download/4.4.1-stable/Godot_v4.4.1-stable_export_templates.tpz -o templates.tpz
+          unzip -q godot.zip -d godot-bin
+          chmod +x godot-bin/Godot_v4.4.1-stable_linux.x86_64
+          mkdir -p "$HOME/.local/share/godot/export_templates/4.4.1.stable"
+          unzip -q templates.tpz -d templates
+          cp templates/templates/android_debug.apk "$HOME/.local/share/godot/export_templates/4.4.1.stable/"
+          cp templates/templates/android_release.apk "$HOME/.local/share/godot/export_templates/4.4.1.stable/"
+          cp templates/templates/android_source.zip "$HOME/.local/share/godot/export_templates/4.4.1.stable/"
+          printf "4.4.1.stable" > "$HOME/.local/share/godot/export_templates/4.4.1.stable/version.txt"
+
+      - name: Configure Godot Android SDK paths
+        run: |
+          mkdir -p "$HOME/.config/godot"
+          cat > "$HOME/.config/godot/editor_settings-4.tres" <<EOF
+          [gd_resource type="EditorSettings" format=3]
+          [resource]
+          export/android/java_sdk_path = "$JAVA_HOME"
+          export/android/android_sdk_path = "$ANDROID_HOME"
+          EOF
+          test -x "$JAVA_HOME/bin/java"
+          test -x "$ANDROID_HOME/platform-tools/adb"
+          test -x "$ANDROID_HOME/platforms/android-34/android.jar"
+          test -x "$ANDROID_HOME/build-tools/34.0.0/aapt"
+          test -x "$ANDROID_HOME/build-tools/34.0.0/apksigner"
+          test -d "$ANDROID_HOME/ndk/23.2.8568313"
+          test -d "$ANDROID_HOME/cmake/3.10.2.4988404"
+          echo "Godot EditorSettings:"
+          cat "$HOME/.config/godot/editor_settings-4.tres"
+          echo "JAVA_HOME=$JAVA_HOME"
+          echo "ANDROID_HOME=$ANDROID_HOME"
+
+      - name: Create temporary CI debug signing key
+        run: |
+          mkdir -p "$RUNNER_TEMP/android"
+          keytool -genkeypair -v -keystore "$RUNNER_TEMP/android/debug.keystore" -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
+
+      - name: Prepare original release signing key
+        if: ${{ env.ANDROID_KEYSTORE_BASE64 != '' && env.ANDROID_KEYSTORE_PASSWORD != '' && env.ANDROID_KEY_ALIAS != '' && env.ANDROID_KEY_PASSWORD != '' }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/android-release"
+          echo "$ANDROID_KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/android-release/release.keystore"
+          test -s "$RUNNER_TEMP/android-release/release.keystore"
+          keytool -list -keystore "$RUNNER_TEMP/android-release/release.keystore" -storepass "$ANDROID_KEYSTORE_PASSWORD" -alias "$ANDROID_KEY_ALIAS" >/dev/null
+
+      - name: Import project and export standalone Android APK
+        env:
+          GODOT_ANDROID_KEYSTORE_DEBUG_PATH: ${{ runner.temp }}/android/debug.keystore
+          GODOT_ANDROID_KEYSTORE_DEBUG_USER: androiddebugkey
+          GODOT_ANDROID_KEYSTORE_DEBUG_PASSWORD: android
+        run: |
+          mkdir -p build
+          godot-bin/Godot_v4.4.1-stable_linux.x86_64 --headless --editor --editor-settings-path "$HOME/.config/godot" --path godot --quit --verbose
+          godot-bin/Godot_v4.4.1-stable_linux.x86_64 --headless --path "$GITHUB_WORKSPACE/godot" --quit-after 5 --verbose
+          godot-bin/Godot_v4.4.1-stable_linux.x86_64 --headless --path "$GITHUB_WORKSPACE/godot" --export-debug "Android" "$GITHUB_WORKSPACE/build/TIGER_CITY_3D-debug.apk" --verbose
+          test -s build/TIGER_CITY_3D-debug.apk
+
+      - name: Verify APK package
+        run: |
+          "$ANDROID_HOME/build-tools/34.0.0/aapt" dump badging build/TIGER_CITY_3D-debug.apk | grep "package: name='com.tigerchat.tigercity3d'"
+          "$ANDROID_HOME/build-tools/34.0.0/apksigner" verify build/TIGER_CITY_3D-debug.apk
+
+      - name: Export production APK with original signing key
+        if: ${{ env.ANDROID_KEYSTORE_BASE64 != '' && env.ANDROID_KEYSTORE_PASSWORD != '' && env.ANDROID_KEY_ALIAS != '' && env.ANDROID_KEY_PASSWORD != '' }}
+        env:
+          GODOT_ANDROID_KEYSTORE_RELEASE_PATH: ${{ runner.temp }}/android-release/release.keystore
+          GODOT_ANDROID_KEYSTORE_RELEASE_USER: ${{ env.ANDROID_KEY_ALIAS }}
+          GODOT_ANDROID_KEYSTORE_RELEASE_PASSWORD: ${{ env.ANDROID_KEY_PASSWORD }}
+        run: |
+          godot-bin/Godot_v4.4.1-stable_linux.x86_64 --headless --path "$GITHUB_WORKSPACE/godot" --export-release "Android" "$GITHUB_WORKSPACE/build/TIGER_CITY_3D-release.apk" --verbose
+          test -s build/TIGER_CITY_3D-release.apk
+          "$ANDROID_HOME/build-tools/34.0.0/aapt" dump badging build/TIGER_CITY_3D-release.apk | grep "package: name='com.tigerchat.tigercity3d'"
+          "$ANDROID_HOME/build-tools/34.0.0/apksigner" verify build/TIGER_CITY_3D-release.apk
+
+      - name: Upload standalone debug APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: TIGER-CITY-3D-Android-debug
+          path: build/TIGER_CITY_3D-debug.apk
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload production release APK
+        if: ${{ env.ANDROID_KEYSTORE_BASE64 != '' && env.ANDROID_KEYSTORE_PASSWORD != '' && env.ANDROID_KEY_ALIAS != '' && env.ANDROID_KEY_PASSWORD != '' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: TIGER-CITY-3D-Android-release
+          path: build/TIGER_CITY_3D-release.apk
+          if-no-files-found: error
+          retention-days: 30
