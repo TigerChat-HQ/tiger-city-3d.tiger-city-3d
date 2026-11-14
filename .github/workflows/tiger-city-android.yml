@@ -57,6 +57,14 @@ jobs:
           export/android/java_sdk_path = "$JAVA_HOME"
           export/android/android_sdk_path = "$ANDROID_HOME"
           EOF
+          test -x "$JAVA_HOME/bin/java"
+          test -x "$ANDROID_HOME/platform-tools/adb"
+          test -x "$ANDROID_HOME/build-tools/35.0.0/aapt"
+          test -x "$ANDROID_HOME/build-tools/35.0.0/apksigner"
+          echo "Godot EditorSettings:"
+          cat "$HOME/.config/godot/editor_settings-4.tres"
+          echo "JAVA_HOME=$JAVA_HOME"
+          echo "ANDROID_HOME=$ANDROID_HOME"
 
       - name: Create temporary CI debug signing key
         run: |
@@ -70,8 +78,8 @@ jobs:
           GODOT_ANDROID_KEYSTORE_DEBUG_PASSWORD: android
         run: |
           mkdir -p build
-          godot-bin/Godot_v4.4.1-stable_linux.x86_64 --headless --editor --path godot --quit
-          godot-bin/Godot_v4.4.1-stable_linux.x86_64 --headless --path godot --export-debug "Android" build/TIGER_CITY_3D-debug.apk
+          godot-bin/Godot_v4.4.1-stable_linux.x86_64 --headless --editor --editor-settings-path "$HOME/.config/godot" --path godot --quit --verbose
+          godot-bin/Godot_v4.4.1-stable_linux.x86_64 --headless --editor-settings-path "$HOME/.config/godot" --path godot --export-debug "Android" build/TIGER_CITY_3D-debug.apk --verbose
           test -s build/TIGER_CITY_3D-debug.apk
 
       - name: Verify APK package
