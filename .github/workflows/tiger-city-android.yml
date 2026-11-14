@@ -11,6 +11,7 @@ on:
   push:
     branches:
       - feat/standalone-android-app
+      - migration/godot-android-prototype
     paths:
       - "godot/**"
       - ".github/workflows/tiger-city-android.yml"
