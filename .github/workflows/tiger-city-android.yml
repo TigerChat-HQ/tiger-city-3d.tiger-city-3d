@@ -31,7 +31,7 @@ jobs:
           export ANDROID_SDK_ROOT="$ANDROID_HOME"
           SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
           yes | "$SDKMANAGER" --licenses
-          "$SDKMANAGER" "platform-tools" "platforms;android-35" "build-tools;35.0.0"
+          "$SDKMANAGER" "platform-tools" "platforms;android-34" "build-tools;34.0.0" "cmdline-tools;latest" "cmake;3.10.2.4988404" "ndk;23.2.8568313"
           echo "ANDROID_HOME=$ANDROID_HOME" >> "$GITHUB_ENV"
           echo "ANDROID_SDK_ROOT=$ANDROID_HOME" >> "$GITHUB_ENV"
 
@@ -59,8 +59,11 @@ jobs:
           EOF
           test -x "$JAVA_HOME/bin/java"
           test -x "$ANDROID_HOME/platform-tools/adb"
-          test -x "$ANDROID_HOME/build-tools/35.0.0/aapt"
-          test -x "$ANDROID_HOME/build-tools/35.0.0/apksigner"
+          test -x "$ANDROID_HOME/platforms/android-34/android.jar"
+          test -x "$ANDROID_HOME/build-tools/34.0.0/aapt"
+          test -x "$ANDROID_HOME/build-tools/34.0.0/apksigner"
+          test -d "$ANDROID_HOME/ndk/23.2.8568313"
+          test -d "$ANDROID_HOME/cmake/3.10.2.4988404"
           echo "Godot EditorSettings:"
           cat "$HOME/.config/godot/editor_settings-4.tres"
           echo "JAVA_HOME=$JAVA_HOME"
@@ -84,8 +87,8 @@ jobs:
 
       - name: Verify APK package
         run: |
-          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging build/TIGER_CITY_3D-debug.apk | grep "package: name='com.tigerchat.tigercity3d'"
-          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify build/TIGER_CITY_3D-debug.apk
+          "$ANDROID_HOME/build-tools/34.0.0/aapt" dump badging build/TIGER_CITY_3D-debug.apk | grep "package: name='com.tigerchat.tigercity3d'"
+          "$ANDROID_HOME/build-tools/34.0.0/apksigner" verify build/TIGER_CITY_3D-debug.apk
 
       - name: Upload standalone APK
         uses: actions/upload-artifact@v4
