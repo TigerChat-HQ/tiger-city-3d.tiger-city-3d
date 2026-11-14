@@ -124,10 +124,15 @@ func _build_production_network() -> void:
 	for spec in specs:
 		var hub := _add_detailed_building(String(spec[0]), spec[2], spec[3], spec[4])
 		production_sites.append({"name": spec[0], "kind": spec[1], "stock": 0, "node": hub})
+	var factory_route: Array = [Vector3(-37, 0, -5)]
+	for city_index in range(5):
+		var city_angle := TAU * float(city_index) / 5.0
+		factory_route.append(Vector3(cos(city_angle) * 62.0, 0, sin(city_angle) * 62.0))
+	factory_route.append(Vector3(-37, 0, -5))
 	cargo_routes = [
 		[Vector3(34, 0, 8), Vector3(16, 0, 4), Vector3(0, 0, 0)],
 		[Vector3(-8, 0, -37), Vector3(-22, 0, -22), Vector3(-37, 0, -5)],
-		[Vector3(-37, 0, -5), Vector3(-12, 0, 14), Vector3(22, 0, 34), Vector3(62, 0, 54)]
+		factory_route
 	]
 	for route in cargo_routes:
 		for i in range(route.size() - 1):
@@ -348,10 +353,13 @@ func _update_city_life(delta: float) -> void:
 			var route: Array = cargo_routes[i]
 			var old_progress := route_progress[i]
 			route_progress[i] = fposmod(old_progress + delta * 0.035, 1.0)
-			if route_progress[i] < old_progress:
-				_deliver_cargo(i)
+			var old_segment := mini(int(old_progress * float(route.size() - 1)), route.size() - 2)
 			var scaled_progress := route_progress[i] * float(route.size() - 1)
 			var segment := mini(int(scaled_progress), route.size() - 2)
+			if route_progress[i] < old_progress and i < 2:
+				_deliver_cargo(i)
+			elif i == 2 and segment > old_segment and segment <= 5:
+				_deliver_goods_to_town(segment - 1)
 			var point: Vector3 = route[segment].lerp(route[segment + 1], scaled_progress - float(segment))
 			vehicle.position = point
 			vehicle.look_at(route[segment + 1], Vector3.UP)
@@ -434,6 +442,17 @@ func _update_city_life(delta: float) -> void:
 		var daylight := (sin(world_clock / 180.0 * TAU - PI / 2.0) + 1.0) * 0.5
 		sun_light.rotation_degrees = Vector3(-15.0 - daylight * 55.0, -30.0, 0.0)
 		sun_light.light_energy = 0.18 + daylight * 1.35
+
+func _deliver_goods_to_town(town_index: int) -> void:
+	if production_sites.size() < 3 or town_index < 0 or town_index >= town_goods_stock.size():
+		return
+	var factory: Dictionary = production_sites[2]
+	var goods_load := mini(12, int(factory.get("stock", 0)))
+	factory["stock"] = int(factory.get("stock", 0)) - goods_load
+	production_sites[2] = factory
+	town_goods_stock[town_index] = mini(500, town_goods_stock[town_index] + goods_load)
+	delivered_goods_total += goods_load
+	status_label.text = "Factory truck delivered %d goods to Town %d." % [goods_load, town_index + 1]
 
 func _deliver_cargo(truck_index: int) -> void:
 	if production_sites.size() < 3:
