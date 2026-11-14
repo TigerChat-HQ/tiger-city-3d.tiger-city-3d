@@ -118,6 +118,12 @@ func _build_production_network() -> void:
 		var hub := _add_detailed_building(String(spec[0]), spec[2], spec[3], spec[4])
 		production_sites.append({"name": spec[0], "kind": spec[1], "stock": 0, "node": hub})
 	route_points = [Vector3(0, 0, 0), Vector3(28, 0, 8), Vector3(48, 0, 30), Vector3(62, 0, 54)]
+	for i in range(route_points.size() - 1):
+		var start: Vector3 = route_points[i]
+		var finish: Vector3 = route_points[i + 1]
+		var direction := finish - start
+		var road := _add_box("Intercity trade road", (start + finish) * 0.5 + Vector3(0, -0.05, 0), Vector3(3.2, 0.12, direction.length()), Color(0.14, 0.15, 0.17))
+		road.rotation.y = atan2(direction.x, direction.z)
 	for i in range(3):
 		var truck := _create_truck(i)
 		truck.position = route_points[0] + Vector3(0, 0, float(i) * 3.0)
