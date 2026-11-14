@@ -25,12 +25,14 @@ A realistic 3D city-building game targeting Android.
 ## Known limitations
 - The current visuals use built-in primitive geometry and the legacy Standard shader. They are greybox placeholders, not photorealistic assets.
 - The first touch interaction uses Unity's legacy mouse input mapping; the final Android input system must be configured and device-tested.
+- `CityOrbitCamera` adds one-finger orbit, two-finger pinch zoom and two-finger pan; desktop editor mouse drag/wheel are also supported.
+- The camera requests landscape-only autorotation (both landscape directions) when gameplay starts; device behavior still needs Android build and device verification.
 - The territory campaign is an early greybox: battles currently resolve from troop strength and random battle factors; the battlefield units and cover are visual placeholders, not yet controllable real-time combat.
 - No complete Unity project scaffold, production assets, online multiplayer backend, or verified Android APK is included yet.
 - Unity Editor is pinned to Unity 6.3 (`6000.3.28f1`) for the initial cloud-build setup; confirm this editor release is available in the Unity Build Automation dashboard before the first build.
 
 ## Project structure
-- `Assets/Scripts/` contains prototype gameplay scripts, including the first territory campaign and invasion loop.
+- `Assets/Scripts/` contains prototype gameplay scripts, including the first territory campaign and invasion loop, plus the mobile orbit camera.
 - `Assets/_Project/Scenes/` is reserved for production scenes.
 - `Assets/_Project/Art/` contains models and textures.
 - `Assets/_Project/Materials/`, `Prefabs/`, `UI/`, `Audio/`, and `Settings/` organize production assets.
