@@ -116,6 +116,13 @@ public sealed class CityPrototype : MonoBehaviour
         camera.transform.LookAt(new Vector3(citySize / 2f, 0f, citySize / 2f));
         camera.fieldOfView = 45f;
         camera.nearClipPlane = 0.1f;
+
+        CityOrbitCamera orbit = camera.GetComponent<CityOrbitCamera>();
+        if (orbit == null) orbit = camera.gameObject.AddComponent<CityOrbitCamera>();
+        GameObject focus = new GameObject("City Camera Focus");
+        focus.transform.position = new Vector3(citySize / 2f, 0f, citySize / 2f);
+        orbit.target = focus.transform;
+        orbit.distance = citySize * 1.15f;
     }
 
     private void ClearGeneratedCity()
