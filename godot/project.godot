@@ -2,6 +2,7 @@ config_version=5
 
 [application]
 config/name="TIGER CITY 3D"
+config/icon="res://icon.svg"
 run/main_scene="res://Main.tscn"
 
 [display]
