@@ -32,6 +32,11 @@ var battle_root: Node3D
 var battle_units: Array[Dictionary] = []
 var battle_active := false
 var battle_reserve := 0
+var city_citizens: Array[Node3D] = []
+var city_vehicles: Array[Node3D] = []
+var economy_clock := 0.0
+var world_clock := 0.0
+var sun_light: DirectionalLight3D
 
 func _ready() -> void:
 	_build_world()
@@ -61,13 +66,14 @@ func _build_world() -> void:
 		var angle := TAU * float(i) / 5.0
 		_add_box("Rival district", Vector3(cos(angle) * 62.0, 2.0, sin(angle) * 62.0), Vector3(9, 4, 9), Color(0.62, 0.18, 0.15))
 	_add_box("Capital", Vector3(0, 3, 0), Vector3(12, 6, 12), Color(0.82, 0.64, 0.22))
-	var sun := DirectionalLight3D.new()
-	sun.rotation_degrees = Vector3(-52, -30, 0)
-	sun.light_energy = 1.4
-	add_child(sun)
+	sun_light = DirectionalLight3D.new()
+	sun_light.rotation_degrees = Vector3(-52, -30, 0)
+	sun_light.light_energy = 1.4
+	add_child(sun_light)
 	camera = Camera3D.new()
 	camera.current = true
 	add_child(camera)
+	_spawn_city_life()
 
 func _add_box(label: String, pos: Vector3, size: Vector3, tint: Color) -> MeshInstance3D:
 	var mesh := BoxMesh.new()
@@ -131,6 +137,66 @@ func _build_ui() -> void:
 	status_label.text = "Drag to rotate • Pinch to zoom • Select a building, then tap the city."
 	status_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	column.add_child(status_label)
+
+func _spawn_city_life() -> void:
+	# Lightweight placeholder pedestrians and traffic make the city feel inhabited.
+	for i in range(14):
+		var person := MeshInstance3D.new()
+		var shape := CapsuleMesh.new()
+		shape.radius = 0.22
+		shape.height = 1.25
+		person.mesh = shape
+		var material := StandardMaterial3D.new()
+		material.albedo_color = [Color(0.75, 0.38, 0.22), Color(0.18, 0.42, 0.68), Color(0.68, 0.62, 0.42)][i % 3]
+		person.material_override = material
+		person.position = Vector3(-33.0 + float(i % 7) * 11.0, 0.72, -42.0 + float(i) * 6.0)
+		city_root.add_child(person)
+		city_citizens.append(person)
+	for i in range(8):
+		var car := MeshInstance3D.new()
+		var shape := BoxMesh.new()
+		shape.size = Vector3(2.5, 0.9, 1.35)
+		car.mesh = shape
+		var material := StandardMaterial3D.new()
+		material.albedo_color = [Color(0.72, 0.16, 0.12), Color(0.12, 0.28, 0.62), Color(0.78, 0.72, 0.48), Color(0.16, 0.17, 0.18)][i % 4]
+		car.material_override = material
+		car.position = Vector3(-48.0 + float(i) * 12.0, 0.58, [-33.0, -22.0, -11.0, 0.0, 11.0, 22.0, 33.0, 0.0][i])
+		city_root.add_child(car)
+		city_vehicles.append(car)
+
+func _update_city_life(delta: float) -> void:
+	for i in range(city_citizens.size()):
+		var person := city_citizens[i]
+		if is_instance_valid(person):
+			person.position.z += delta * (0.65 + float(i % 4) * 0.12)
+			if person.position.z > 48.0:
+				person.position.z = -48.0
+	for i in range(city_vehicles.size()):
+		var car := city_vehicles[i]
+		if is_instance_valid(car):
+			car.position.x += delta * (3.0 + float(i % 3) * 0.7)
+			if car.position.x > 52.0:
+				car.position.x = -52.0
+	economy_clock += delta
+	if economy_clock >= 8.0:
+		economy_clock = 0.0
+		var shop_count := 0
+		var office_count := 0
+		for entry in buildings:
+			if int(entry.get("kind", -1)) == 1:
+				shop_count += 1
+			elif int(entry.get("kind", -1)) == 2:
+				office_count += 1
+		var income := 10 + shop_count * 18 + office_count * 28
+		coins += income
+		if supplies < 200:
+			supplies += 1
+		_update_ui()
+	world_clock = fmod(world_clock + delta, 180.0)
+	if is_instance_valid(sun_light):
+		var daylight := (sin(world_clock / 180.0 * TAU - PI / 2.0) + 1.0) * 0.5
+		sun_light.rotation_degrees = Vector3(-15.0 - daylight * 55.0, -30.0, 0.0)
+		sun_light.light_energy = 0.18 + daylight * 1.35
 
 func _select_building(kind: int) -> void:
 	selected_building = kind
@@ -317,6 +383,7 @@ func _spawn_battle_unit(side: int, index: int) -> void:
 	battle_units.append({"node": unit_node, "side": side, "hp": 100.0, "cooldown": randf_range(0.1, 0.8), "dead": false})
 
 func _process(delta: float) -> void:
+	_update_city_life(delta)
 	if not battle_active:
 		return
 	var friendly_alive := 0
