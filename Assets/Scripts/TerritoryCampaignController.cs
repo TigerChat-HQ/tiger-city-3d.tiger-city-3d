@@ -250,8 +250,13 @@ public sealed class TerritoryCampaignController : MonoBehaviour
         Camera camera = Camera.main;
         if (camera != null)
         {
-            camera.transform.position = new Vector3(0, 62, -70);
-            camera.transform.LookAt(Vector3.zero);
+            CityOrbitCamera orbit = camera.GetComponent<CityOrbitCamera>();
+            if (orbit != null) orbit.Focus(Vector3.zero, 72f);
+            else
+            {
+                camera.transform.position = new Vector3(0, 62, -70);
+                camera.transform.LookAt(Vector3.zero);
+            }
         }
     }
 
