@@ -46,6 +46,7 @@ var goods_stock := 120
 var city_happiness := 72
 var citizen_needs: Array[Dictionary] = []
 var last_trade_income := 0
+var service_nodes: Dictionary = {}
 
 func _ready() -> void:
 	_build_world()
@@ -115,7 +116,15 @@ func _build_service(service_name: String) -> void:
 	var service_positions := {"water": Vector3(-18, 2.5, 18), "power": Vector3(18, 3, 18), "health": Vector3(-18, 3.5, -18), "education": Vector3(18, 3, -18)}
 	var service_colors := {"water": Color(0.16, 0.48, 0.78), "power": Color(0.88, 0.72, 0.18), "health": Color(0.78, 0.22, 0.24), "education": Color(0.28, 0.62, 0.38)}
 	var height := 5.0 + float(service_levels[service_name])
-	_add_box(service_name.capitalize() + " service", service_positions[service_name], Vector3(5, height, 5), service_colors[service_name])
+	var service_node: MeshInstance3D = service_nodes.get(service_name)
+	if is_instance_valid(service_node):
+		var service_mesh := BoxMesh.new()
+		service_mesh.size = Vector3(5, height, 5)
+		service_node.mesh = service_mesh
+		service_node.position = service_positions[service_name]
+	else:
+		service_node = _add_box(service_name.capitalize() + " service", service_positions[service_name], Vector3(5, height, 5), service_colors[service_name])
+		service_nodes[service_name] = service_node
 	status_label.text = "%s service upgraded to level %d." % [service_name.capitalize(), service_levels[service_name]]
 	_update_ui()
 func _add_detailed_building(label: String, pos: Vector3, size: Vector3, tint: Color) -> MeshInstance3D:
@@ -274,8 +283,8 @@ func _update_city_life(delta: float) -> void:
 		var education_coverage := mini(100, 20 + int(service_levels["education"]) * 25)
 		var food_produced := 8 + shop_count * 9
 		var goods_produced := 5 + shop_count * 7 + office_count * 2
-		food_stock = mini(500, food_stock + food_produced - population * 2)
-		goods_stock = mini(500, goods_stock + goods_produced - population)
+		food_stock = clampi(food_stock + food_produced - population * 2, 0, 500)
+		goods_stock = clampi(goods_stock + goods_produced - population, 0, 500)
 		var food_shortage := food_stock < 20
 		var goods_shortage := goods_stock < 15
 		for i in range(citizen_needs.size()):
@@ -581,7 +590,7 @@ func _save_game() -> void:
 	for entry in buildings:
 		var p: Vector3 = entry.position
 		saved_buildings.append({"x": p.x, "z": p.z, "kind": entry.kind})
-	var data := {"coins": coins, "soldiers": soldiers, "supplies": supplies, "captured": captured, "buildings": saved_buildings, "service_levels": service_levels, "food_stock": food_stock, "goods_stock": goods_stock, "city_happiness": city_happiness}
+	var data := {"coins": coins, "soldiers": soldiers, "supplies": supplies, "captured": captured, "buildings": saved_buildings, "service_levels": service_levels, "food_stock": food_stock, "goods_stock": goods_stock, "city_happiness": city_happiness, "citizen_needs": citizen_needs}
 	var file := FileAccess.open(SAVE_PATH, FileAccess.WRITE)
 	if file == null:
 		status_label.text = "Could not save the game on this device."
@@ -613,6 +622,10 @@ func _load_game() -> void:
 	food_stock = maxi(0, int(parsed.get("food_stock", 180)))
 	goods_stock = maxi(0, int(parsed.get("goods_stock", 120)))
 	city_happiness = clampi(int(parsed.get("city_happiness", 72)), 0, 100)
+	var saved_needs: Array = parsed.get("citizen_needs", [])
+	for i in range(mini(citizen_needs.size(), saved_needs.size())):
+		if saved_needs[i] is Dictionary:
+			citizen_needs[i] = saved_needs[i].duplicate(true)
 	for item in buildings:
 		var node = item.get("node")
 		if is_instance_valid(node):
