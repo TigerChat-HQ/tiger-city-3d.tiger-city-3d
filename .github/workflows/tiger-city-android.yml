@@ -22,6 +22,11 @@ permissions:
 jobs:
   android-apk:
     runs-on: ubuntu-latest
+    env:
+      ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+      ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+      ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+      ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -81,6 +86,14 @@ jobs:
           mkdir -p "$RUNNER_TEMP/android"
           keytool -genkeypair -v -keystore "$RUNNER_TEMP/android/debug.keystore" -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
 
+      - name: Prepare original release signing key
+        if: ${{ env.ANDROID_KEYSTORE_BASE64 != '' && env.ANDROID_KEYSTORE_PASSWORD != '' && env.ANDROID_KEY_ALIAS != '' && env.ANDROID_KEY_PASSWORD != '' }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/android-release"
+          echo "$ANDROID_KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/android-release/release.keystore"
+          test -s "$RUNNER_TEMP/android-release/release.keystore"
+          keytool -list -keystore "$RUNNER_TEMP/android-release/release.keystore" -storepass "$ANDROID_KEYSTORE_PASSWORD" -alias "$ANDROID_KEY_ALIAS" >/dev/null
+
       - name: Import project and export standalone Android APK
         env:
           GODOT_ANDROID_KEYSTORE_DEBUG_PATH: ${{ runner.temp }}/android/debug.keystore
@@ -97,10 +110,31 @@ jobs:
           "$ANDROID_HOME/build-tools/34.0.0/aapt" dump badging build/TIGER_CITY_3D-debug.apk | grep "package: name='com.tigerchat.tigercity3d'"
           "$ANDROID_HOME/build-tools/34.0.0/apksigner" verify build/TIGER_CITY_3D-debug.apk
 
-      - name: Upload standalone APK
+      - name: Export production APK with original signing key
+        if: ${{ env.ANDROID_KEYSTORE_BASE64 != '' && env.ANDROID_KEYSTORE_PASSWORD != '' && env.ANDROID_KEY_ALIAS != '' && env.ANDROID_KEY_PASSWORD != '' }}
+        env:
+          GODOT_ANDROID_KEYSTORE_RELEASE_PATH: ${{ runner.temp }}/android-release/release.keystore
+          GODOT_ANDROID_KEYSTORE_RELEASE_USER: ${{ env.ANDROID_KEY_ALIAS }}
+          GODOT_ANDROID_KEYSTORE_RELEASE_PASSWORD: ${{ env.ANDROID_KEY_PASSWORD }}
+        run: |
+          godot-bin/Godot_v4.4.1-stable_linux.x86_64 --headless --path "$GITHUB_WORKSPACE/godot" --export-release "Android" "$GITHUB_WORKSPACE/build/TIGER_CITY_3D-release.apk" --verbose
+          test -s build/TIGER_CITY_3D-release.apk
+          "$ANDROID_HOME/build-tools/34.0.0/aapt" dump badging build/TIGER_CITY_3D-release.apk | grep "package: name='com.tigerchat.tigercity3d'"
+          "$ANDROID_HOME/build-tools/34.0.0/apksigner" verify build/TIGER_CITY_3D-release.apk
+
+      - name: Upload standalone debug APK
         uses: actions/upload-artifact@v4
         with:
           name: TIGER-CITY-3D-Android-debug
           path: build/TIGER_CITY_3D-debug.apk
           if-no-files-found: error
           retention-days: 14
+
+      - name: Upload production release APK
+        if: ${{ env.ANDROID_KEYSTORE_BASE64 != '' && env.ANDROID_KEYSTORE_PASSWORD != '' && env.ANDROID_KEY_ALIAS != '' && env.ANDROID_KEY_PASSWORD != '' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: TIGER-CITY-3D-Android-release
+          path: build/TIGER_CITY_3D-release.apk
+          if-no-files-found: error
+          retention-days: 30
