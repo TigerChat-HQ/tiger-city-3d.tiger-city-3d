@@ -128,9 +128,24 @@ func _build_production_network() -> void:
 func _create_truck(index: int) -> Node3D:
 	var truck := Node3D.new()
 	var paint := [Color(0.72, 0.18, 0.12), Color(0.16, 0.36, 0.68), Color(0.72, 0.62, 0.30)][index % 3]
-	var body := _add_box("Truck body", Vector3.ZERO, Vector3(2.8, 0.75, 1.45), paint)
+	var body := MeshInstance3D.new()
+	var body_mesh := BoxMesh.new()
+	body_mesh.size = Vector3(2.8, 0.75, 1.45)
+	body.mesh = body_mesh
+	body.position.y = 0.15
+	var body_material := StandardMaterial3D.new()
+	body_material.albedo_color = paint
+	body_material.metallic = 0.25
+	body.material_override = body_material
 	truck.add_child(body)
-	var cabin := _add_box("Truck cabin", Vector3(0.75, 0.7, 0), Vector3(1.05, 0.82, 1.35), Color(0.12, 0.25, 0.32))
+	var cabin := MeshInstance3D.new()
+	var cabin_mesh := BoxMesh.new()
+	cabin_mesh.size = Vector3(1.05, 0.82, 1.35)
+	cabin.mesh = cabin_mesh
+	cabin.position = Vector3(0.75, 0.9, 0)
+	var cabin_material := StandardMaterial3D.new()
+	cabin_material.albedo_color = Color(0.12, 0.25, 0.32)
+	cabin.material_override = cabin_material
 	truck.add_child(cabin)
 	for x in [-0.9, 0.9]:
 		for z in [-0.82, 0.82]:
