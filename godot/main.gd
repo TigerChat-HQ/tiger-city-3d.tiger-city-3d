@@ -288,7 +288,7 @@ func _build_ui() -> void:
 	attack.text = "ATTACK NEIGHBOUR (-15)"
 	attack.pressed.connect(_attack)
 	column.add_child(attack)
-	for service_name in ["water", "power", "health", "education"]:
+	for service_name in ["water", "power", "health", "education", "police", "fire"]:
 		var service_button := Button.new()
 		service_button.text = "UPGRADE " + service_name.to_upper()
 		service_button.pressed.connect(func(): _build_service(service_name))
