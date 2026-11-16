@@ -470,37 +470,122 @@ func _build_ui() -> void:
 	column.add_child(status_label)
 
 func _spawn_city_life() -> void:
-	# Lightweight placeholder pedestrians and traffic make the city feel inhabited.
+	# More human proportions and layered clothing silhouettes than the old toy capsules.
 	for i in range(14):
 		var person := Node3D.new()
-		var shape := CapsuleMesh.new()
-		shape.radius = 0.22
-		shape.height = 1.25
+		var clothing := StandardMaterial3D.new()
+		clothing.albedo_color = [Color(0.25, 0.34, 0.42), Color(0.43, 0.25, 0.18), Color(0.18, 0.35, 0.27), Color(0.54, 0.46, 0.32)][i % 4]
+		clothing.roughness = 0.94
+		var skin := StandardMaterial3D.new()
+		skin.albedo_color = [Color(0.27, 0.16, 0.11), Color(0.43, 0.27, 0.19), Color(0.58, 0.38, 0.27)][i % 3]
+		skin.roughness = 0.96
 		var torso := MeshInstance3D.new()
-		torso.mesh = shape
-		torso.position.y = 0.35
+		var torso_shape := CapsuleMesh.new()
+		torso_shape.radius = 0.22
+		torso_shape.height = 0.82
+		torso.mesh = torso_shape
+		torso.position.y = 1.05
+		torso.material_override = clothing
 		person.add_child(torso)
-		var material := StandardMaterial3D.new()
-		material.albedo_color = [Color(0.75, 0.38, 0.22), Color(0.18, 0.42, 0.68), Color(0.68, 0.62, 0.42)][i % 3]
-		torso.material_override = material
 		var head := MeshInstance3D.new()
 		var head_shape := SphereMesh.new()
-		head_shape.radius = 0.19
-		head_shape.height = 0.38
+		head_shape.radius = 0.155
+		head_shape.height = 0.31
 		head.mesh = head_shape
-		head.position.y = 1.0
-		head.material_override = material
+		head.position.y = 1.62
+		head.material_override = skin
 		person.add_child(head)
-		person.position = Vector3(-33.0 + float(i % 7) * 11.0, 0.72, -42.0 + float(i) * 6.0)
+		var hair := MeshInstance3D.new()
+		var hair_shape := SphereMesh.new()
+		hair_shape.radius = 0.16
+		hair_shape.height = 0.14
+		hair.mesh = hair_shape
+		hair.position.y = 1.75
+		var hair_material := StandardMaterial3D.new()
+		hair_material.albedo_color = Color(0.08, 0.065, 0.05)
+		hair.material_override = hair_material
+		person.add_child(hair)
+		for side_offset in [-1.0, 1.0]:
+			var arm := MeshInstance3D.new()
+			var arm_shape := CapsuleMesh.new()
+			arm_shape.radius = 0.075
+			arm_shape.height = 0.58
+			arm.mesh = arm_shape
+			arm.position = Vector3(side_offset * 0.27, 1.0, 0)
+			arm.rotation.z = side_offset * -0.18
+			arm.material_override = clothing
+			person.add_child(arm)
+			var leg := MeshInstance3D.new()
+			var leg_shape := CapsuleMesh.new()
+			leg_shape.radius = 0.085
+			leg_shape.height = 0.72
+			leg.mesh = leg_shape
+			leg.position = Vector3(side_offset * 0.105, 0.43, 0)
+			leg.material_override = clothing
+			person.add_child(leg)
+		person.position = Vector3(-33.0 + float(i % 7) * 11.0, 0.0, -42.0 + float(i) * 6.0)
 		city_root.add_child(person)
 		city_citizens.append(person)
 		citizen_needs.append({"hunger": 0.0, "health": 80.0, "education": 20.0, "happiness": 72.0})
-	for i in range(5):
-		var car := _create_truck(i)
-		car.scale = Vector3(0.62, 0.62, 0.62)
-		car.position = Vector3(-48.0 + float(i) * 12.0, 0.58, [-33.0, -22.0, -11.0, 0.0, 11.0, 22.0, 33.0, 0.0][i])
+	for i in range(7):
+		var car := _create_civilian_car(i)
+		car.position = Vector3(-48.0 + float(i) * 14.0, 0.0, [-33.0, -22.0, -11.0, 0.0, 11.0, 22.0, 33.0][i])
 		city_root.add_child(car)
 		city_vehicles.append(car)
+
+func _create_civilian_car(index: int) -> Node3D:
+	var car := Node3D.new()
+	var paint := StandardMaterial3D.new()
+	paint.albedo_color = [Color(0.68, 0.16, 0.12), Color(0.12, 0.24, 0.34), Color(0.72, 0.70, 0.62), Color(0.18, 0.20, 0.21), Color(0.48, 0.52, 0.55)][index % 5]
+	paint.metallic = 0.62
+	paint.roughness = 0.28
+	var glass := StandardMaterial3D.new()
+	glass.albedo_color = Color(0.035, 0.10, 0.14)
+	glass.metallic = 0.58
+	glass.roughness = 0.12
+	var rubber := StandardMaterial3D.new()
+	rubber.albedo_color = Color(0.025, 0.028, 0.03)
+	rubber.roughness = 0.96
+	var chassis := MeshInstance3D.new()
+	var chassis_mesh := BoxMesh.new()
+	chassis_mesh.size = Vector3(2.15, 0.52, 1.05)
+	chassis.mesh = chassis_mesh
+	chassis.position.y = 0.62
+	chassis.material_override = paint
+	car.add_child(chassis)
+	var cabin := MeshInstance3D.new()
+	var cabin_mesh := BoxMesh.new()
+	cabin_mesh.size = Vector3(1.18, 0.58, 0.92)
+	cabin.mesh = cabin_mesh
+	cabin.position = Vector3(-0.08, 1.12, 0)
+	cabin.material_override = glass
+	car.add_child(cabin)
+	for x in [-0.68, 0.68]:
+		for z in [-0.57, 0.57]:
+			var wheel := MeshInstance3D.new()
+			var wheel_mesh := CylinderMesh.new()
+			wheel_mesh.top_radius = 0.29
+			wheel_mesh.bottom_radius = 0.29
+			wheel_mesh.height = 0.17
+			wheel.mesh = wheel_mesh
+			wheel.rotation_degrees.z = 90
+			wheel.position = Vector3(x, 0.34, z)
+			wheel.material_override = rubber
+			car.add_child(wheel)
+	for z in [-0.34, 0.34]:
+		var headlight := MeshInstance3D.new()
+		var light_mesh := BoxMesh.new()
+		light_mesh.size = Vector3(0.12, 0.16, 0.14)
+		headlight.mesh = light_mesh
+		headlight.position = Vector3(1.09, 0.67, z)
+		var lamp := StandardMaterial3D.new()
+		lamp.albedo_color = Color(0.94, 0.85, 0.62)
+		lamp.emission_enabled = true
+		lamp.emission = Color(0.9, 0.7, 0.38)
+		lamp.emission_energy_multiplier = 0.45
+		headlight.material_override = lamp
+		car.add_child(headlight)
+	return car
 
 func _update_city_life(delta: float) -> void:
 	for i in range(city_citizens.size()):
