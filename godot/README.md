@@ -8,6 +8,9 @@ The active Android-friendly branch is built with Godot 4; the player does not ne
 - Generated city blocks with facade glazing, rooftop plant details, street markings, raised curbs and streetlights.
 - Better-proportioned pedestrian meshes and civilian cars.
 - City economy, services, production, delivery routes, recruitment, building placement and local save/load.
+- Graphics presets: Low (30 FPS cap, 72% 3D render scale, no MSAA/shadows), Medium (40 FPS cap, 86% scale, 2x MSAA and shadows) and High (60 FPS cap, full 3D scale, 2x MSAA, shadows and glow).
+- Saved graphics preference, adjustable visible civilian/soldier counts by quality, and an automatic sustained-frame-load guard that lowers quality under prolonged frame-time pressure.
+- Offline-first single-player prototype: gameplay and local save/load do not require a runtime network connection; generated character assets and PBR resources are packaged at build time.
 - Tactical battle scene with equipped infantry, defensive earthworks, armoured tank props, advance/hold/retreat orders, and a visible air-support flyover.
 - Territory capture rewards coins, food, supplies and records total loot.
 
@@ -24,3 +27,7 @@ GitHub Actions performs headless Godot project import/script parsing and an Andr
 - Robust combat tactics, pathfinding, formations, cover, line of sight and destructible environments.
 - Complete offline-first campaign, optional authenticated multiplayer and two-device PvP testing.
 - Android device QA and stable release signing.
+
+## Mobile performance and thermal limitation
+
+The automatic guard currently uses sustained frame-time pressure as a load/heat proxy. Godot's portable GDScript API does not expose Android battery temperature/thermal status, so this build does not claim to read the phone's actual temperature. A native Android thermal-status bridge and physical-device thermal testing are still required for true temperature-triggered quality changes. The Low profile is the conservative starting point for 4 GB RAM devices; actual RAM use and frame rate must be profiled on the target phone.
