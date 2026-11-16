@@ -336,6 +336,7 @@ func _add_city_street_details() -> void:
 	var sidewalk_material := StandardMaterial3D.new()
 	sidewalk_material.albedo_color = Color(0.48, 0.49, 0.46)
 	sidewalk_material.roughness = 0.96
+	_apply_pbr_maps(sidewalk_material, "PavingStones135", 3.0)
 	for lane in range(GRID + 1):
 		var road_pos := (float(lane) - GRID / 2.0) * (BLOCK + ROAD)
 		for dash_index in range(-9, 10):
