@@ -4,6 +4,7 @@ The active Android-friendly branch is built with Godot 4; the player does not ne
 
 ## Current implementation
 - Mobile renderer, filmic environment, procedural sky, directional shadows and surface noise.
+- Android CI fetches 1K CC0 photogrammetry PBR sets for asphalt, concrete and paving stones from ambientCG and packages them into the APK. Local editor runs without running the asset-fetch step use procedural fallbacks.
 - Generated city blocks with facade glazing, rooftop plant details, street markings, raised curbs and streetlights.
 - Better-proportioned pedestrian meshes and civilian cars.
 - City economy, services, production, delivery routes, recruitment, building placement and local save/load.
