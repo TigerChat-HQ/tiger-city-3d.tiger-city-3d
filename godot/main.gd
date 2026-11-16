@@ -70,10 +70,32 @@ func _ready() -> void:
 	_update_camera()
 
 func _build_world() -> void:
+	# Cinematic mobile-friendly world lighting and physically based material defaults.
+	var world_environment := WorldEnvironment.new()
+	var environment := Environment.new()
+	environment.background_mode = Environment.BG_SKY
+	var sky := Sky.new()
+	var sky_material := ProceduralSkyMaterial.new()
+	sky_material.sky_top_color = Color(0.12, 0.24, 0.39)
+	sky_material.sky_horizon_color = Color(0.68, 0.76, 0.82)
+	sky_material.ground_bottom_color = Color(0.12, 0.15, 0.13)
+	sky_material.ground_horizon_color = Color(0.48, 0.53, 0.48)
+	sky.sky_material = sky_material
+	environment.sky = sky
+	environment.ambient_light_source = Environment.AMBIENT_SOURCE_SKY
+	environment.ambient_light_energy = 0.62
+	environment.tonemap_mode = Environment.TONE_MAPPER_FILMIC
+	environment.tonemap_exposure = 1.05
+	environment.glow_enabled = true
+	environment.glow_intensity = 0.18
+	environment.ssr_enabled = false
+	world_environment.environment = environment
+	add_child(world_environment)
 	city_root = Node3D.new()
 	city_root.name = "GeneratedCity"
 	add_child(city_root)
 	_add_box("Ground", Vector3(0, -0.3, 0), Vector3(100, 0.5, 100), Color(0.20, 0.32, 0.20))
+	_add_city_street_details()
 	for i in range(GRID + 1):
 		var p := (float(i) - GRID / 2.0) * (BLOCK + ROAD)
 		_add_box("RoadX", Vector3(0, 0.02, p), Vector3(100, 0.12, ROAD), Color(0.12, 0.13, 0.15))
@@ -97,6 +119,10 @@ func _build_world() -> void:
 	sun_light = DirectionalLight3D.new()
 	sun_light.rotation_degrees = Vector3(-52, -30, 0)
 	sun_light.light_energy = 1.4
+	sun_light.shadow_enabled = true
+	sun_light.directional_shadow_max_distance = 110.0
+	sun_light.directional_shadow_mode = DirectionalLight3D.SHADOW_PARALLEL_4_SPLITS
+	sun_light.light_angular_distance = 0.7
 	add_child(sun_light)
 	camera = Camera3D.new()
 	camera.current = true
@@ -215,10 +241,18 @@ func _build_service(service_name: String) -> void:
 	_update_ui()
 func _add_detailed_building(label: String, pos: Vector3, size: Vector3, tint: Color) -> MeshInstance3D:
 	var building := _add_box(label, pos, size, tint)
+	var facade := StandardMaterial3D.new()
+	facade.albedo_color = tint
+	facade.roughness = 0.82
+	facade.metallic = 0.04
+	building.material_override = facade
 	var window_material := StandardMaterial3D.new()
-	window_material.albedo_color = Color(0.22, 0.48, 0.62)
-	window_material.metallic = 0.22
-	window_material.roughness = 0.28
+	window_material.albedo_color = Color(0.12, 0.25, 0.32)
+	window_material.metallic = 0.48
+	window_material.roughness = 0.16
+	window_material.emission_enabled = true
+	window_material.emission = Color(0.08, 0.13, 0.16)
+	window_material.emission_energy_multiplier = 0.12
 	var floors := maxi(1, int(size.y / 2.6))
 	var columns := maxi(1, int(size.x / 1.5))
 	for floor_index in range(floors):
@@ -230,6 +264,34 @@ func _add_detailed_building(label: String, pos: Vector3, size: Vector3, tint: Co
 			window_mesh.position = Vector3(pos.x - size.x * 0.5 + 0.75 + float(column_index) * 1.15, 1.0 + float(floor_index) * 2.35, pos.z - size.z * 0.5 - 0.045)
 			window_mesh.material_override = window_material
 			city_root.add_child(window_mesh)
+			var rear_window := MeshInstance3D.new()
+			rear_window.mesh = window_shape
+			rear_window.position = Vector3(pos.x - size.x * 0.5 + 0.75 + float(column_index) * 1.15, 1.0 + float(floor_index) * 2.35, pos.z + size.z * 0.5 + 0.045)
+			rear_window.material_override = window_material
+			city_root.add_child(rear_window)
+	# A restrained parapet and rooftop plant room break up the toy-like flat roof silhouette.
+	var parapet_material := StandardMaterial3D.new()
+	parapet_material.albedo_color = tint.darkened(0.18)
+	parapet_material.roughness = 0.9
+	for edge in [-1.0, 1.0]:
+		var parapet := MeshInstance3D.new()
+		var parapet_mesh := BoxMesh.new()
+		parapet_mesh.size = Vector3(size.x + 0.2, 0.42, 0.22)
+		parapet.mesh = parapet_mesh
+		parapet.position = pos + Vector3(0, size.y * 0.5 + 0.31, edge * size.z * 0.5)
+		parapet.material_override = parapet_material
+		city_root.add_child(parapet)
+	var rooftop_unit := MeshInstance3D.new()
+	var rooftop_mesh := BoxMesh.new()
+	rooftop_mesh.size = Vector3(minf(1.8, size.x * 0.42), 0.65, minf(1.5, size.z * 0.42))
+	rooftop_unit.mesh = rooftop_mesh
+	rooftop_unit.position = pos + Vector3(size.x * 0.2, size.y * 0.5 + 0.55, 0)
+	var rooftop_material := StandardMaterial3D.new()
+	rooftop_material.albedo_color = Color(0.34, 0.37, 0.39)
+	rooftop_material.metallic = 0.55
+	rooftop_material.roughness = 0.52
+	rooftop_unit.material_override = rooftop_material
+	city_root.add_child(rooftop_unit)
 	var roof := MeshInstance3D.new()
 	var roof_shape := BoxMesh.new()
 	roof_shape.size = Vector3(size.x + 0.35, 0.22, size.z + 0.35)
@@ -240,6 +302,87 @@ func _add_detailed_building(label: String, pos: Vector3, size: Vector3, tint: Co
 	roof.material_override = roof_material
 	city_root.add_child(roof)
 	return building
+
+func _add_city_street_details() -> void:
+	var asphalt_marking := StandardMaterial3D.new()
+	asphalt_marking.albedo_color = Color(0.82, 0.78, 0.62)
+	asphalt_marking.roughness = 0.92
+	var sidewalk_material := StandardMaterial3D.new()
+	sidewalk_material.albedo_color = Color(0.48, 0.49, 0.46)
+	sidewalk_material.roughness = 0.96
+	for lane in range(GRID + 1):
+		var road_pos := (float(lane) - GRID / 2.0) * (BLOCK + ROAD)
+		for dash_index in range(-9, 10):
+			var offset := float(dash_index) * 5.2
+			var dash_x := MeshInstance3D.new()
+			var dash_mesh := BoxMesh.new()
+			dash_mesh.size = Vector3(2.2, 0.025, 0.12)
+			dash_x.mesh = dash_mesh
+			dash_x.position = Vector3(offset, 0.095, road_pos)
+			dash_x.material_override = asphalt_marking
+			city_root.add_child(dash_x)
+			var dash_z := MeshInstance3D.new()
+			var dash_z_mesh := BoxMesh.new()
+			dash_z_mesh.size = Vector3(0.12, 0.025, 2.2)
+			dash_z.mesh = dash_z_mesh
+			dash_z.position = Vector3(road_pos, 0.095, offset)
+			dash_z.material_override = asphalt_marking
+			city_root.add_child(dash_z)
+		for side in [-1.0, 1.0]:
+			var curb_x := MeshInstance3D.new()
+			var curb_mesh := BoxMesh.new()
+			curb_mesh.size = Vector3(100, 0.32, 0.38)
+			curb_x.mesh = curb_mesh
+			curb_x.position = Vector3(0, 0.12, road_pos + side * (ROAD * 0.5 + 0.24))
+			curb_x.material_override = sidewalk_material
+			city_root.add_child(curb_x)
+			var curb_z := MeshInstance3D.new()
+			var curb_z_mesh := BoxMesh.new()
+			curb_z_mesh.size = Vector3(0.38, 0.32, 100)
+			curb_z.mesh = curb_z_mesh
+			curb_z.position = Vector3(road_pos + side * (ROAD * 0.5 + 0.24), 0.12, 0)
+			curb_z.material_override = sidewalk_material
+			city_root.add_child(curb_z)
+	for x in range(-3, 4):
+		for z in range(-3, 4):
+			if abs(x) == 3 or abs(z) == 3:
+				_continue
+			if (x + z) % 2 == 0:
+				_add_streetlight(Vector3(float(x) * (BLOCK + ROAD) + 2.4, 0, float(z) * (BLOCK + ROAD) - 2.4))
+
+func _add_streetlight(pos: Vector3) -> void:
+	var pole_material := StandardMaterial3D.new()
+	pole_material.albedo_color = Color(0.18, 0.20, 0.21)
+	pole_material.metallic = 0.72
+	pole_material.roughness = 0.38
+	var pole := MeshInstance3D.new()
+	var pole_mesh := CylinderMesh.new()
+	pole_mesh.top_radius = 0.055
+	pole_mesh.bottom_radius = 0.09
+	pole_mesh.height = 5.4
+	pole.mesh = pole_mesh
+	pole.position = pos + Vector3(0, 2.7, 0)
+	pole.material_override = pole_material
+	city_root.add_child(pole)
+	var arm := MeshInstance3D.new()
+	var arm_mesh := BoxMesh.new()
+	arm_mesh.size = Vector3(1.1, 0.08, 0.08)
+	arm.mesh = arm_mesh
+	arm.position = pos + Vector3(0.48, 5.25, 0)
+	arm.material_override = pole_material
+	city_root.add_child(arm)
+	var lamp := MeshInstance3D.new()
+	var lamp_mesh := BoxMesh.new()
+	lamp_mesh.size = Vector3(0.42, 0.16, 0.24)
+	lamp.mesh = lamp_mesh
+	lamp.position = pos + Vector3(0.94, 5.17, 0)
+	var lamp_material := StandardMaterial3D.new()
+	lamp_material.albedo_color = Color(0.98, 0.82, 0.55)
+	lamp_material.emission_enabled = true
+	lamp_material.emission = Color(1.0, 0.66, 0.28)
+	lamp_material.emission_energy_multiplier = 1.4
+	lamp.material_override = lamp_material
+	city_root.add_child(lamp)
 
 func _add_box(label: String, pos: Vector3, size: Vector3, tint: Color) -> MeshInstance3D:
 	var mesh := BoxMesh.new()
