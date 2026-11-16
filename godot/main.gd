@@ -1221,10 +1221,10 @@ func _process(delta: float) -> void:
 			var direction := (nearest.position - actor.position).normalized()
 			if side == 1 or battle_order == "advance":
 				actor.position += direction * delta * (2.4 if side == 0 else 2.1)
-				_play_character_animation(actor, "run")
+				_play_character_animation(actor, "rifle run")
 			elif side == 0 and battle_order == "retreat":
 				actor.position -= direction * delta * 3.0
-				_play_character_animation(actor, "run")
+				_play_character_animation(actor, "rifle run")
 			else:
 				_play_character_animation(actor, "rifle idle")
 			if actor.has_meta("tiger_animation_player"):
