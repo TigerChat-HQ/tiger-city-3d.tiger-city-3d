@@ -1035,6 +1035,8 @@ func _load_character_asset(asset_path: String, preferred_animation: String) -> N
 	if not players.is_empty():
 		var animation_player := players[0] as AnimationPlayer
 		character.set_meta("tiger_animation_player", animation_player)
+		if not animation_player.animation_finished.is_connected(_on_character_animation_finished):
+			animation_player.animation_finished.connect(_on_character_animation_finished.bind(character))
 		for animation_name in animation_player.get_animation_list():
 			var clip := animation_player.get_animation(animation_name)
 			var lower_name := animation_name.to_lower()
@@ -1066,6 +1068,14 @@ func _play_character_animation(actor: Node3D, action: String) -> void:
 	if selected == "" or animation_player.current_animation == selected:
 		return
 	animation_player.play(selected, 0.18)
+
+func _on_character_animation_finished(_animation_name: StringName, actor: Node3D) -> void:
+	if not is_instance_valid(actor):
+		return
+	if bool(actor.get_meta("tiger_dead", false)):
+		actor.queue_free()
+		return
+	_play_character_animation(actor, "rifle idle")
 
 func _spawn_battle_unit(side: int, index: int) -> void:
 	var imported_soldier := _load_character_asset("res://assets/characters/soldier.glb", "rifle idle")
@@ -1217,7 +1227,10 @@ func _process(delta: float) -> void:
 				_play_character_animation(actor, "run")
 			else:
 				_play_character_animation(actor, "rifle idle")
-			actor.look_at(Vector3(nearest.position.x, actor.position.y, nearest.position.z), Vector3.UP)
+			if actor.has_meta("tiger_animation_player"):
+				actor.look_at(Vector3(nearest.position.x, actor.position.y, nearest.position.z), Vector3.UP, true)
+			else:
+				actor.look_at(Vector3(nearest.position.x, actor.position.y, nearest.position.z), Vector3.UP)
 		elif cooldown <= 0.0:
 			_play_character_animation(actor, "rifle fire")
 			for j in range(battle_units.size()):
@@ -1228,7 +1241,11 @@ func _process(delta: float) -> void:
 						target["dead"] = true
 						var target_node: Node3D = target.get("node")
 						if is_instance_valid(target_node):
-							target_node.queue_free()
+							if target_node.has_meta("tiger_animation_player"):
+								target_node.set_meta("tiger_dead", true)
+								_play_character_animation(target_node, "death")
+							else:
+								target_node.queue_free()
 					battle_units[j] = target
 					break
 			cooldown = 0.65
