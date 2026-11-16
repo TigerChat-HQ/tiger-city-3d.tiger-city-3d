@@ -1,26 +1,36 @@
-# Character model import slots
+# Rigged character assets
 
-The Godot scene now prefers imported, rigged glTF binary characters when these files are present:
+The Android CI build now generates and imports these character scenes before Godot's asset import/export step:
 
-- `civilian.glb` — rigged civilian with a looping walk animation.
-- `soldier.glb` — rigged soldier with an idle animation and, ideally, locomotion/combat clips.
+- `soldier.glb`: high-fidelity human anatomy base, fatigue uniform, tactical vest, helmet, combat boots, rifle, 65-bone game rig and the Ara shooter/combat animation set.
+- `civilian_01.glb`, `civilian_02.glb`, `civilian_03.glb`: three distinct rigged civilian appearances with walk/run clips.
 
-Place the files in this directory. The importer looks for an embedded `AnimationPlayer`, selects an animation whose name contains the requested action (case-insensitive), and falls back to the first embedded clip. If a file is absent or invalid, the current procedural character remains as a fallback.
+The generated models are based on the CC0 MakeHuman character dataset via Ara 3D Gen. The source generator uses photo-based skin textures, clothing normal maps, rigged humanoid geometry and an export pipeline for Godot-compatible GLB. The Android workflow downloads the generator and MakeHuman source assets, builds the characters, copies the GLBs into this folder, then imports and packages them into the APK. No runtime internet access is needed.
 
-## Asset requirements before shipping
+## Animation mapping
 
-- Prefer GLB/glTF 2.0 with embedded textures and a humanoid skeleton.
-- Keep civilian and soldier skeletons consistent if sharing animation clips.
-- Include at least idle, walk, run, and combat/weapon-ready animations for soldiers.
-- Use physically based materials; keep texture maps embedded or copied beside the GLB.
-- Optimize meshes and texture dimensions for Android; keep source/licence notes in `ASSET_CREDITS.md`.
-- Confirm each asset's individual licence and redistribution rights before adding it to a public APK.
+- City pedestrians: `Walk` (looped); game movement controls translation.
+- Soldiers moving: `Run` (looped); game movement controls translation.
+- Soldiers holding position: `Rifle idle (low ready)` (looped).
+- Soldiers engaging: `Rifle fire (single)` (one-shot); damage remains controlled by the battle simulation.
+- The imported rig also includes other locomotion, shooter, hit, fall/death and melee clips for later gameplay wiring.
 
-## Candidate animation source
+The loader chooses clips by name and enables looping for idle/locomotion. If a generated model is missing, the existing procedural fallback remains available.
 
-Quaternius Universal Base Characters and Universal Animation Library are CC0, humanoid-rigged resources compatible with Godot. Their free downloadable pack variants may be stylized rather than photorealistic, so they are a rig/animation candidate, not a claim of photoreal character quality:
+## Build and performance
 
-- https://quaternius.com/packs/universalbasecharacters.html
-- https://quaternius.com/packs/universalanimationlibrary.html
+The generator uses the medium character detail tier for the repeated mobile units (approximately 30–40k triangles per human); this balances anatomy and skin/clothing detail against the cost of rendering many skinned soldiers on Android. This is not a claim of film-grade photorealism. Final visual acceptance still requires inspection on the target phone, frame-rate/thermal profiling and tuning of shadows, texture memory and LODs.
 
-No third-party character model is bundled by this integration commit yet. The procedural fallback remains active until the actual GLB files are added and tested in the Android build.
+## Licensing and provenance
+
+- Generator code: Ara 3D Gen, MIT.
+- Character source data: MakeHuman assets, CC0 1.0.
+- Generated character exports: permitted for commercial and non-commercial use under the upstream asset terms.
+- CI copies the upstream MakeHuman CC0 notice to `MAKEHUMAN-CC0-LICENSE.txt`.
+
+Upstream project and documentation:
+- https://github.com/TuriaArt/3d-gen-TU
+- https://github.com/TuriaArt/3d-gen-TU/blob/main/scripts/ASSETS_LICENSE.txt
+- https://creativecommons.org/publicdomain/zero/1.0/
+
+Do not replace these with low-poly/stylized assets for the production visual target without explicit approval.
