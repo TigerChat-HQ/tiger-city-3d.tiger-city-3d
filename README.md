@@ -1,50 +1,31 @@
 # TIGER CITY 3D
 
-A realistic 3D city-building game targeting Android.
+TIGER CITY 3D is a mobile-first 3D city-builder and territory strategy game. The unfinished Unity-only prototype is being migrated to a browser-native Three.js client so development and Android packaging can run through GitHub Actions without Unity Editor on the player's phone.
 
-## Vision
-- Ultra-realistic cinematic 3D as the visual target, subject to Android performance budgets.
-- Build homes, shops, offices, roads, and civic services.
-- Vehicles, pedestrians, day/night lighting, weather, and a growing city economy.
-- Offline-first gameplay; online multiplayer will be added only after synchronization and server security are implemented and tested.
+## Current playable prototype
+- Three.js 3D city scene with touch orbit, zoom, roads, trees, lighting and procedural buildings.
+- Build houses, shops, offices and barracks by selecting a tool and tapping open ground.
+- Coins, population and army counters; barracks recruit troops.
+- First animated battle/conquest demonstration with a victory state and loot.
+- Local save/load and basic offline play after app assets have been installed.
+- Capacitor Android wrapper and GitHub Actions debug APK workflow.
 
-## Current source milestone
-- Procedural greybox city grid with roads, ground, buildings, sun lighting, and a camera.
-- First building loop: choose a house, shop, or office; tap open ground to place it; coins are deducted.
-- Local save/load uses Unity PlayerPrefs JSON.
-- This is an early prototype, not a finished realistic game.
+## Run
+```sh
+npm install
+npm run dev
+```
 
-## Unity scene setup
-1. Create a Unity 3D project.
-2. Add an empty GameObject named `CityRoot` to a scene.
-3. Add both `CityPrototype` and `CityBuildController` components to `CityRoot`.
-4. Ensure the scene has a camera tagged `MainCamera`, or let `CityPrototype` create one.
-5. Press Play. Select a building from the bottom toolbar and tap open ground to place it.
-6. Use SAVE and LOAD to test local persistence.
+## Android build
+GitHub Actions installs dependencies, builds the Three.js game, generates the Capacitor Android wrapper and uploads a debug APK artifact. This path does not require Unity Editor on the user's phone.
 
-## Known limitations
-- The current visuals use built-in primitive geometry and the legacy Standard shader. They are greybox placeholders, not photorealistic assets.
-- The first touch interaction uses Unity's legacy mouse input mapping; the final Android input system must be configured and device-tested.
-- No complete Unity project scaffold, production assets, online multiplayer backend, or verified Android APK is included yet.
-- Unity Editor is pinned to Unity 6.3 (`6000.3.28f1`) for the initial cloud-build setup; confirm this editor release is available in the Unity Build Automation dashboard before the first build.
+## Roadmap to the full game
+- Tactical real-time combat with player-issued orders, persistent neighboring factions and territory control.
+- Multiple troop classes, commanders, air force, navy, defensive installations and enemy counterattacks.
+- Deep city economy, utilities, citizens, traffic, weather and day/night cycle.
+- Robust IndexedDB saves, offline asset precaching and real-device QA.
+- Online accounts and synchronized multiplayer only after server-side authorization and two-account end-to-end testing.
+- Optimized original 3D assets and performance profiling on target Android devices.
 
-## Project structure
-- `Assets/Scripts/` contains prototype gameplay scripts.
-- `Assets/_Project/Scenes/` is reserved for production scenes.
-- `Assets/_Project/Art/` contains models and textures.
-- `Assets/_Project/Materials/`, `Prefabs/`, `UI/`, `Audio/`, and `Settings/` organize production assets.
-- `Packages/manifest.json` defines Unity Package Manager dependencies.
-- `ProjectSettings/ProjectVersion.txt` pins the editor version for cloud auto-detection.
-
-## Android cloud build path
-1. Open the Unity Cloud Dashboard and select this Unity project.
-2. Open DevOps > Build Automation > Settings > Source control.
-3. Select GitHub and authorize repository access. This repository is public, so read-only access is sufficient for a manual build; auto-build needs repository webhook permission.
-4. Save the source-control settings, then create a build configuration for the `main` branch.
-5. Choose Android, select Unity `6000.3.28f1` (or the exact version confirmed in the dashboard), and configure an APK build rather than an Android App Bundle for direct phone installation.
-6. Start a build and check Build history. Download/install only after the build reports success.
-
-Cloud build is not yet configured or tested. The project still needs a real Unity scene and a successful Unity import/compile before an APK can be expected.
-
-## Validation status
-Source files have been committed to GitHub. No Unity compilation, Play Mode test, Android device test, or APK build has been run yet.
+## Honest status
+This is an early playable prototype scaffold, not a finished or store-ready game. The current battle is a prototype demonstration, not a complete war simulation. APK workflow success and physical Android device testing must be verified independently; no device verification is claimed.
