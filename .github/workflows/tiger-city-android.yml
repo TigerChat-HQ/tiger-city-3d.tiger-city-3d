@@ -32,6 +32,54 @@ jobs:
           distribution: temurin
           java-version: "17"
 
+      - name: Generate realistic rigged character assets and animations
+        env:
+          ARA_DIR: ${{ runner.temp }}/ara-3d-gen
+          CHARACTER_OUT: ${{ runner.temp }}/tiger-characters
+        run: |
+          git clone --depth 1 https://github.com/TuriaArt/3d-gen-TU.git "$ARA_DIR"
+          cd "$ARA_DIR"
+          npm ci
+          npm run setup-assets
+          mkdir -p "$CHARACTER_OUT" "$RUNNER_TEMP/tiger-character-params"
+          node --import tsx --input-type=module <<'NODE'
+          import { writeFileSync } from 'node:fs';
+          import { join } from 'node:path';
+          import { DEFAULT_PARAMS, PRESETS } from './src/core/params.ts';
+          const specs = [
+            ['soldier', 'The Soldier', 'medium', 'rifle'],
+            ['civilian_01', 'Athletic man', 'medium', 'none'],
+            ['civilian_02', 'Businesswoman', 'medium', 'none'],
+            ['civilian_03', 'Elder', 'medium', 'none'],
+          ];
+          for (const [name, preset, detail, weapon] of specs) {
+            if (!PRESETS[preset]) throw new Error('Missing Ara preset: ' + preset);
+            const params = {
+              ...DEFAULT_PARAMS,
+              ...PRESETS[preset],
+              name,
+              detail,
+              rig: 'game',
+              restPose: 'T',
+              animations: true,
+              weapon,
+            };
+            writeFileSync(join(process.env.RUNNER_TEMP, 'tiger-character-params', name + '.json'), JSON.stringify(params));
+          }
+          NODE
+          for name in soldier civilian_01 civilian_02 civilian_03; do
+            npm run export -- --params "$RUNNER_TEMP/tiger-character-params/$name.json" --formats glb --out "$CHARACTER_OUT"
+            test -s "$CHARACTER_OUT/$name.glb"
+          done
+          mkdir -p "$GITHUB_WORKSPACE/godot/assets/characters"
+          cp "$CHARACTER_OUT/soldier.glb" "$GITHUB_WORKSPACE/godot/assets/characters/soldier.glb"
+          for n in 01 02 03; do
+            cp "$CHARACTER_OUT/civilian_$n.glb" "$GITHUB_WORKSPACE/godot/assets/characters/civilian_$n.glb"
+          done
+          cp scripts/ASSETS_LICENSE.txt "$GITHUB_WORKSPACE/godot/assets/characters/MAKEHUMAN-CC0-LICENSE.txt"
+          ls -lh "$GITHUB_WORKSPACE/godot/assets/characters"
+          cd "$GITHUB_WORKSPACE"
+
       - name: Install Android SDK packages
         run: |
           export ANDROID_HOME="/usr/local/lib/android/sdk"
