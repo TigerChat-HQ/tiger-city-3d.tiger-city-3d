@@ -1,3 +1,4 @@
+# Re-run CI for PR #6 after runner startup failure mitigation.
 name: TIGER CITY 3D Android APK
 
 on:
