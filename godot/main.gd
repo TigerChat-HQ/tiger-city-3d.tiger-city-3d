@@ -32,6 +32,9 @@ var battle_root: Node3D
 var battle_units: Array[Dictionary] = []
 var battle_active := false
 var battle_reserve := 0
+var battle_order := "advance"
+var battle_command_buttons: Array[Button] = []
+var total_loot := 0
 var city_citizens: Array[Node3D] = []
 var city_vehicles: Array[Node3D] = []
 var economy_clock := 0.0
@@ -288,6 +291,23 @@ func _build_ui() -> void:
 	attack.text = "ATTACK NEIGHBOUR (-15)"
 	attack.pressed.connect(_attack)
 	column.add_child(attack)
+	var command_row := HBoxContainer.new()
+	column.add_child(command_row)
+	for command in [["ADVANCE", "advance"], ["HOLD", "hold"], ["RETREAT", "retreat"]]:
+		var command_button := Button.new()
+		command_button.text = command[0]
+		command_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		var order: String = command[1]
+		command_button.pressed.connect(func(): _set_battle_order(order))
+		command_row.add_child(command_button)
+		command_button.visible = false
+		battle_command_buttons.append(command_button)
+	var air_support := Button.new()
+	air_support.text = "AIR SUPPORT (-900 COINS)"
+	air_support.pressed.connect(_battle_air_support)
+	column.add_child(air_support)
+	air_support.visible = false
+	battle_command_buttons.append(air_support)
 	for service_name in ["water", "power", "health", "education"]:
 		var service_button := Button.new()
 		service_button.text = "UPGRADE " + service_name.to_upper()
@@ -601,6 +621,9 @@ func _attack() -> void:
 
 func _start_battle() -> void:
 	battle_active = true
+	battle_order = "advance"
+	for command_button in battle_command_buttons:
+		command_button.visible = true
 	battle_units.clear()
 	battle_reserve = maxi(0, soldiers - 12)
 	battle_root = Node3D.new()
@@ -636,7 +659,7 @@ func _start_battle() -> void:
 	pitch = 0.82
 	yaw = 0.0
 	_update_camera()
-	status_label.text = "Battle started! Watch your soldiers advance and fight."
+	status_label.text = "Battle started! Choose ADVANCE, HOLD or RETREAT. Air support costs 900 coins."
 	_update_ui()
 
 func _spawn_battle_unit(side: int, index: int) -> void:
@@ -717,7 +740,10 @@ func _process(delta: float) -> void:
 		var cooldown := maxf(0.0, float(unit.get("cooldown", 0.0)) - delta)
 		if nearest_distance > 1.8:
 			var direction := (nearest.position - actor.position).normalized()
-			actor.position += direction * delta * (2.4 if side == 0 else 2.1)
+			if side == 1 or battle_order == "advance":
+				actor.position += direction * delta * (2.4 if side == 0 else 2.1)
+			elif side == 0 and battle_order == "retreat":
+				actor.position -= direction * delta * 3.0
 			actor.look_at(Vector3(nearest.position.x, actor.position.y, nearest.position.z), Vector3.UP)
 		elif cooldown <= 0.0:
 			for j in range(battle_units.size()):
@@ -734,8 +760,55 @@ func _process(delta: float) -> void:
 			cooldown = 0.65
 		unit["cooldown"] = cooldown
 		battle_units[i] = unit
+	if battle_order == "retreat" and friendly_alive > 0:
+		var all_friendly_retreated := true
+		for unit in battle_units:
+			if int(unit.get("side", 0)) == 0 and not bool(unit.get("dead", false)):
+				var retreating_actor: Node3D = unit.get("node")
+				if is_instance_valid(retreating_actor) and retreating_actor.position.x > -21.0:
+					all_friendly_retreated = false
+		if all_friendly_retreated:
+			_finish_battle(false)
+			return
 	if enemy_alive == 0 or friendly_alive == 0:
 		_finish_battle(friendly_alive > 0 and enemy_alive == 0)
+
+func _set_battle_order(order: String) -> void:
+	if not battle_active or not ["advance", "hold", "retreat"].has(order):
+		return
+	battle_order = order
+	match order:
+		"advance":
+			status_label.text = "Order issued: advance and engage the enemy."
+		"hold":
+			status_label.text = "Order issued: hold position and defend. Enemy must approach."
+		"retreat":
+			status_label.text = "Order issued: retreat to the capital. Territory will not be captured."
+
+func _battle_air_support() -> void:
+	if not battle_active:
+		return
+	if coins < 900:
+		status_label.text = "Air support requires 900 coins."
+		return
+	coins -= 900
+	var hits := 0
+	for i in range(battle_units.size()):
+		var target: Dictionary = battle_units[i]
+		if int(target.get("side", 0)) != 1 or bool(target.get("dead", false)):
+			continue
+		target["hp"] = float(target.get("hp", 100.0)) - 42.0
+		if float(target["hp"]) <= 0.0:
+			target["dead"] = true
+			var target_node: Node3D = target.get("node")
+			if is_instance_valid(target_node):
+				target_node.queue_free()
+		battle_units[i] = target
+		hits += 1
+		if hits >= 5:
+			break
+	status_label.text = "Air support struck %d enemy units. 900 coins spent." % hits
+	_update_ui()
 
 func _finish_battle(victory: bool) -> void:
 	var survivors := 0
@@ -746,9 +819,16 @@ func _finish_battle(victory: bool) -> void:
 	soldiers = battle_reserve + survivors
 	if victory:
 		captured += 1
-		status_label.text = "Victory! Your surviving soldiers captured the neighbouring territory."
+		var loot := 1200 + captured * 350
+		coins += loot
+		total_loot += loot
+		supplies = mini(500, supplies + 20)
+		food_stock = mini(500, food_stock + 12)
+		status_label.text = "Victory! Territory captured. Loot: %d coins, +20 supplies and +12 food." % loot
 	else:
-		status_label.text = "Defeat. Your surviving soldiers retreat to the capital."
+		status_label.text = "Defeat or retreat. Your surviving soldiers return to the capital; no territory loot."
+	for command_button in battle_command_buttons:
+		command_button.visible = false
 	if is_instance_valid(battle_root):
 		battle_root.queue_free()
 	battle_root = null
@@ -767,7 +847,7 @@ func _save_game() -> void:
 	var saved_production: Array[Dictionary] = []
 	for site in production_sites:
 		saved_production.append({"kind": site.get("kind", ""), "stock": int(site.get("stock", 0))})
-	var data := {"coins": coins, "soldiers": soldiers, "supplies": supplies, "captured": captured, "buildings": saved_buildings, "service_levels": service_levels, "food_stock": food_stock, "goods_stock": goods_stock, "city_happiness": city_happiness, "citizen_needs": citizen_needs, "emergency_incidents": emergency_incidents, "factory_ore_stock": factory_ore_stock, "town_food_stock": town_food_stock, "town_goods_stock": town_goods_stock, "production_stocks": saved_production}
+	var data := {"coins": coins, "soldiers": soldiers, "supplies": supplies, "captured": captured, "buildings": saved_buildings, "service_levels": service_levels, "food_stock": food_stock, "goods_stock": goods_stock, "city_happiness": city_happiness, "citizen_needs": citizen_needs, "emergency_incidents": emergency_incidents, "factory_ore_stock": factory_ore_stock, "town_food_stock": town_food_stock, "town_goods_stock": town_goods_stock, "production_stocks": saved_production, "total_loot": total_loot}
 	var file := FileAccess.open(SAVE_PATH, FileAccess.WRITE)
 	if file == null:
 		status_label.text = "Could not save the game on this device."
@@ -792,7 +872,8 @@ func _load_game() -> void:
 	coins = int(parsed.get("coins", 5000))
 	soldiers = int(parsed.get("soldiers", 24))
 	supplies = int(parsed.get("supplies", 100))
-	captured = int(parsed.get("captured", 0))
+	captured = clampi(int(parsed.get("captured", 0)), 0, 5)
+	total_loot = maxi(0, int(parsed.get("total_loot", 0)))
 	var saved_services: Dictionary = parsed.get("service_levels", {})
 	for service_name in service_levels.keys():
 		service_levels[service_name] = maxi(0, int(saved_services.get(service_name, 0)))
@@ -835,4 +916,4 @@ func _load_game() -> void:
 func _update_ui() -> void:
 	if stats_label:
 		var service_summary := "Water %d | Power %d | Health %d | School %d | Police %d | Fire %d" % [service_levels["water"], service_levels["power"], service_levels["health"], service_levels["education"], service_levels["police"], service_levels["fire"]]
-		stats_label.text = "Coins: %d\nSoldiers: %d\nSupplies: %d\nDistricts captured: %d/5\nServices: %s\nPeople: %d | Happiness: %d%%\nEmergency incidents: %d\nCapital food: %d | Goods: %d | Factory ore: %d\nDelivered F/O/G: %d/%d/%d\nTown 1 stocks: F%d G%d\nCycle: +%d / -%d | Trade: +%d" % [coins, soldiers, supplies, captured, service_summary, city_citizens.size(), city_happiness, emergency_incidents, food_stock, goods_stock, factory_ore_stock, delivered_food_total, delivered_ore_total, delivered_goods_total, town_food_stock[0], town_goods_stock[0], last_economy_income, last_economy_expense, last_trade_income]
+		stats_label.text = "Coins: %d\nSoldiers: %d\nSupplies: %d\nDistricts captured: %d/5\nTotal loot: %d\nServices: %s\nPeople: %d | Happiness: %d%%\nEmergency incidents: %d\nCapital food: %d | Goods: %d | Factory ore: %d\nDelivered F/O/G: %d/%d/%d\nTown 1 stocks: F%d G%d\nCycle: +%d / -%d | Trade: +%d" % [coins, soldiers, supplies, captured, total_loot, service_summary, city_citizens.size(), city_happiness, emergency_incidents, food_stock, goods_stock, factory_ore_stock, delivered_food_total, delivered_ore_total, delivered_goods_total, town_food_stock[0], town_goods_stock[0], last_economy_income, last_economy_expense, last_trade_income]
