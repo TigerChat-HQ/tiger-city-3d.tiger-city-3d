@@ -8,6 +8,7 @@ on:
   push:
     branches:
       - migration/godot-android-prototype
+      - feat/standalone-android-app
     paths:
       - 'godot/**'
       - '.github/workflows/godot-check.yml'
