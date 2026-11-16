@@ -35,6 +35,7 @@ var battle_reserve := 0
 var battle_order := "advance"
 var battle_command_buttons: Array[Button] = []
 var total_loot := 0
+var surface_noise_texture: NoiseTexture2D
 var city_citizens: Array[Node3D] = []
 var city_vehicles: Array[Node3D] = []
 var economy_clock := 0.0
@@ -71,6 +72,15 @@ func _ready() -> void:
 
 func _build_world() -> void:
 	# Cinematic mobile-friendly world lighting and physically based material defaults.
+	var surface_noise := FastNoiseLite.new()
+	surface_noise.noise_type = FastNoiseLite.TYPE_SIMPLEX
+	surface_noise.frequency = 0.055
+	surface_noise.fractal_octaves = 4
+	surface_noise.fractal_lacunarity = 2.1
+	surface_noise_texture = NoiseTexture2D.new()
+	surface_noise_texture.noise = surface_noise
+	surface_noise_texture.width = 256
+	surface_noise_texture.height = 256
 	var world_environment := WorldEnvironment.new()
 	var environment := Environment.new()
 	environment.background_mode = Environment.BG_SKY
@@ -245,6 +255,7 @@ func _add_detailed_building(label: String, pos: Vector3, size: Vector3, tint: Co
 	facade.albedo_color = tint
 	facade.roughness = 0.82
 	facade.metallic = 0.04
+	facade.roughness_texture = surface_noise_texture
 	building.material_override = facade
 	var window_material := StandardMaterial3D.new()
 	window_material.albedo_color = Color(0.12, 0.25, 0.32)
@@ -393,6 +404,9 @@ func _add_box(label: String, pos: Vector3, size: Vector3, tint: Color) -> MeshIn
 	item.position = pos
 	var material := StandardMaterial3D.new()
 	material.albedo_color = tint
+	material.roughness = 0.92 if label.begins_with("Road") or label == "Ground" else 0.78
+	if label.begins_with("Road") or label == "Ground":
+		material.roughness_texture = surface_noise_texture
 	item.material_override = material
 	city_root.add_child(item)
 	return item
