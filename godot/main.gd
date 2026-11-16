@@ -1151,6 +1151,44 @@ func _set_battle_order(order: String) -> void:
 		"retreat":
 			status_label.text = "Order issued: retreat to the capital. Territory will not be captured."
 
+func _create_air_support_plane() -> Node3D:
+	var aircraft := Node3D.new()
+	var fuselage_material := StandardMaterial3D.new()
+	fuselage_material.albedo_color = Color(0.27, 0.31, 0.29)
+	fuselage_material.metallic = 0.52
+	fuselage_material.roughness = 0.42
+	var fuselage := MeshInstance3D.new()
+	var fuselage_mesh := CapsuleMesh.new()
+	fuselage_mesh.radius = 0.38
+	fuselage_mesh.height = 4.8
+	fuselage.mesh = fuselage_mesh
+	fuselage.rotation.x = PI * 0.5
+	fuselage_material.resource_name = "Aircraft matte metal"
+	fuselage.material_override = fuselage_material
+	aircraft.add_child(fuselage)
+	var wing := MeshInstance3D.new()
+	var wing_mesh := BoxMesh.new()
+	wing_mesh.size = Vector3(8.2, 0.16, 1.05)
+	wing.mesh = wing_mesh
+	wing.position.y = -0.02
+	wing.material_override = fuselage_material
+	aircraft.add_child(wing)
+	var tail := MeshInstance3D.new()
+	var tail_mesh := BoxMesh.new()
+	tail_mesh.size = Vector3(2.8, 0.12, 0.65)
+	tail.mesh = tail_mesh
+	tail.position.z = 1.75
+	tail.material_override = fuselage_material
+	aircraft.add_child(tail)
+	var fin := MeshInstance3D.new()
+	var fin_mesh := BoxMesh.new()
+	fin_mesh.size = Vector3(0.16, 1.0, 0.85)
+	fin.mesh = fin_mesh
+	fin.position = Vector3(0, 0.48, 1.72)
+	fin.material_override = fuselage_material
+	aircraft.add_child(fin)
+	return aircraft
+
 func _battle_air_support() -> void:
 	if not battle_active:
 		return
@@ -1158,6 +1196,20 @@ func _battle_air_support() -> void:
 		status_label.text = "Air support requires 900 coins."
 		return
 	coins -= 900
+	var aircraft := _create_air_support_plane()
+	aircraft.position = Vector3(-27, 17, 0)
+	aircraft.rotation.y = -PI * 0.5
+	battle_root.add_child(aircraft)
+	status_label.text = "Air support inbound. Aircraft approaching the battlefield..."
+	_update_ui()
+	var flyover := create_tween()
+	flyover.set_trans(Tween.TRANS_QUAD)
+	flyover.set_ease(Tween.EASE_IN_OUT)
+	flyover.tween_property(aircraft, "position", Vector3(27, 14, 0), 2.4)
+	await flyover.finished
+	if not battle_active or not is_instance_valid(aircraft):
+		return
+	aircraft.queue_free()
 	var hits := 0
 	for i in range(battle_units.size()):
 		var target: Dictionary = battle_units[i]
@@ -1173,7 +1225,7 @@ func _battle_air_support() -> void:
 		hits += 1
 		if hits >= 5:
 			break
-	status_label.text = "Air support struck %d enemy units. 900 coins spent." % hits
+	status_label.text = "Air strike completed: %d enemy soldiers hit. 900 coins spent." % hits
 	_update_ui()
 
 func _finish_battle(victory: bool) -> void:
