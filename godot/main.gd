@@ -249,6 +249,20 @@ func _build_service(service_name: String) -> void:
 		service_nodes[service_name] = service_node
 	status_label.text = "%s service upgraded to level %d." % [service_name.capitalize(), service_levels[service_name]]
 	_update_ui()
+func _apply_pbr_maps(material: StandardMaterial3D, folder: String, tiling: float) -> void:
+	var color_path := "res://assets/materials/" + folder + "/" + folder + "_1K-JPG_Color.jpg"
+	var normal_path := "res://assets/materials/" + folder + "/" + folder + "_1K-JPG_NormalGL.jpg"
+	var roughness_path := "res://assets/materials/" + folder + "/" + folder + "_1K-JPG_Roughness.jpg"
+	if ResourceLoader.exists(color_path):
+		material.albedo_texture = load(color_path)
+	if ResourceLoader.exists(normal_path):
+		material.normal_enabled = true
+		material.normal_texture = load(normal_path)
+		material.normal_scale = 0.62
+	if ResourceLoader.exists(roughness_path):
+		material.roughness_texture = load(roughness_path)
+	material.uv1_scale = Vector3(tiling, tiling, tiling)
+
 func _add_detailed_building(label: String, pos: Vector3, size: Vector3, tint: Color) -> MeshInstance3D:
 	var building := _add_box(label, pos, size, tint)
 	var facade := StandardMaterial3D.new()
@@ -256,6 +270,7 @@ func _add_detailed_building(label: String, pos: Vector3, size: Vector3, tint: Co
 	facade.roughness = 0.82
 	facade.metallic = 0.04
 	facade.roughness_texture = surface_noise_texture
+	_apply_pbr_maps(facade, "Concrete049", 2.5)
 	building.material_override = facade
 	var window_material := StandardMaterial3D.new()
 	window_material.albedo_color = Color(0.12, 0.25, 0.32)
@@ -405,8 +420,13 @@ func _add_box(label: String, pos: Vector3, size: Vector3, tint: Color) -> MeshIn
 	var material := StandardMaterial3D.new()
 	material.albedo_color = tint
 	material.roughness = 0.92 if label.begins_with("Road") or label == "Ground" else 0.78
-	if label.begins_with("Road") or label == "Ground":
+	if label.begins_with("Road"):
 		material.roughness_texture = surface_noise_texture
+		_apply_pbr_maps(material, "Asphalt032", 8.0)
+	elif label == "Ground":
+		material.roughness_texture = surface_noise_texture
+	elif label.begins_with("Sidewalk"):
+		_apply_pbr_maps(material, "PavingStones135", 3.0)
 	item.material_override = material
 	city_root.add_child(item)
 	return item
