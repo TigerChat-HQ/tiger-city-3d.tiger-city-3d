@@ -32,6 +32,11 @@ jobs:
           distribution: temurin
           java-version: "17"
 
+      - name: Set up Node.js 22 for character asset generation
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
       - name: Generate realistic rigged character assets and animations
         env:
           ARA_DIR: ${{ runner.temp }}/ara-3d-gen
