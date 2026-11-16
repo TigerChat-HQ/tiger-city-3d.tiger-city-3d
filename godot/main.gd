@@ -1,5 +1,8 @@
 extends Node3D
 
+const CAMPAIGN_SCRIPT = preload("res://scripts/campaign_director.gd")
+const BATTLEFIELD_SCRIPT = preload("res://scripts/battlefield_systems.gd")
+
 const GRID := 6
 const BLOCK := 8.0
 const ROAD := 3.0
@@ -72,15 +75,60 @@ var resolution_selector: OptionButton
 var auto_guard_toggle: CheckButton
 var settings_panel: VBoxContainer
 var render_resolution_scale := 0.7
+var campaign_director: Node
+var battlefield_systems: Node3D
+var campaign_status_label: Label
 
 func _ready() -> void:
 	_build_world()
+	_init_war_systems()
 	_build_ui()
 	_load_graphics_preferences()
 	_apply_graphics_quality(graphics_quality, false)
 	_load_game()
 	_update_ui()
 	_update_camera()
+
+func _init_war_systems() -> void:
+	campaign_director = CAMPAIGN_SCRIPT.new()
+	campaign_director.name = "CampaignDirector"
+	add_child(campaign_director)
+	campaign_director.campaign_objective_completed.connect(_on_campaign_objective_completed)
+	battlefield_systems = BATTLEFIELD_SCRIPT.new()
+	battlefield_systems.name = "BattlefieldSystems"
+	add_child(battlefield_systems)
+
+func _on_campaign_objective_completed(objective_id: String) -> void:
+	if is_instance_valid(status_label):
+		status_label.text = "Campaign objective completed: %s" % objective_id
+	_update_ui()
+
+func _advance_campaign_turn() -> void:
+	if battle_active:
+		status_label.text = "Finish the current battle before advancing the campaign."
+		return
+	if not is_instance_valid(campaign_director):
+		return
+	campaign_director.advance_turn()
+	var owned := 0
+	for region_id in campaign_director.territories:
+		if campaign_director.territories[region_id].get("owner", "") == "player" and region_id != "capital":
+			owned += 1
+	status_label.text = "Campaign turn %d. You control %d rival territories. Enemy factions have made their moves." % [campaign_director.turn_number, owned]
+	_update_ui()
+
+func _capture_campaign_region() -> void:
+	if not is_instance_valid(campaign_director):
+		return
+	for region_id in campaign_director.territories:
+		var region: Dictionary = campaign_director.territories[region_id]
+		if region_id == "capital" or region.get("owner", "") == "player":
+			continue
+		for owned_id in campaign_director.territories:
+			var owned_region: Dictionary = campaign_director.territories[owned_id]
+			if owned_region.get("owner", "") == "player" and region_id in owned_region.get("neighbors", []):
+				campaign_director.capture_territory(region_id, "player")
+				return
 
 func _build_world() -> void:
 	# Cinematic mobile-friendly world lighting and physically based material defaults.
@@ -508,6 +556,13 @@ func _build_ui() -> void:
 	offline_label.text = "OFFLINE READY • Local save on this device"
 	offline_label.add_theme_color_override("font_color", Color(0.35, 0.82, 0.48))
 	column.add_child(offline_label)
+	var campaign_turn_button := Button.new()
+	campaign_turn_button.text = "END CAMPAIGN TURN"
+	campaign_turn_button.pressed.connect(_advance_campaign_turn)
+	column.add_child(campaign_turn_button)
+	campaign_status_label = Label.new()
+	campaign_status_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	column.add_child(campaign_status_label)
 	stats_label = Label.new()
 	column.add_child(stats_label)
 	for pair in [["HOUSE", 0], ["SHOP", 1], ["OFFICE", 2]]:
@@ -1095,6 +1150,16 @@ func _start_battle() -> void:
 		trench.position = Vector3(trench_side * 10.0, 0.35, -11.5)
 		trench.material_override = battlefield_earth
 		battle_root.add_child(trench)
+		var trench_body := StaticBody3D.new()
+		trench_body.position = trench.position
+		var trench_collision := CollisionShape3D.new()
+		var trench_shape := BoxShape3D.new()
+		trench_shape.size = trench_mesh.size
+		trench_collision.shape = trench_shape
+		trench_body.add_child(trench_collision)
+		battle_root.add_child(trench_body)
+		if is_instance_valid(battlefield_systems):
+			battlefield_systems.cover_objects.append(trench)
 		for bag_index in range(7):
 			var sandbag := MeshInstance3D.new()
 			var bag_mesh := CapsuleMesh.new()
@@ -1123,10 +1188,23 @@ func _start_battle() -> void:
 		line_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 		line.material_override = line_material
 		battle_root.add_child(line)
+	# Register trench cells as blocked before the unit path queries begin.
+	if is_instance_valid(battlefield_systems):
+		for trench_side in [-1.0, 1.0]:
+			battlefield_systems.set_obstacle(Vector3(trench_side * 10.0, 0.0, -11.5), true)
 	var deployed := mini(_max_visible_soldiers(), soldiers)
 	battle_reserve = maxi(0, soldiers - deployed)
 	for i in range(deployed):
 		_spawn_battle_unit(0, i)
+	var friendly_formation: Array[Node3D] = []
+	for unit in battle_units:
+		if int(unit.get("side", 0)) == 0 and is_instance_valid(unit.get("node")):
+			friendly_formation.append(unit.get("node"))
+	if is_instance_valid(battlefield_systems) and not friendly_formation.is_empty():
+		battlefield_systems.apply_formation(friendly_formation, Vector3(-12.0, 0.0, 0.0), Vector3.RIGHT, BATTLEFIELD_SCRIPT.Formation.WEDGE, 2.1)
+		for soldier_node in friendly_formation:
+			var destination: Vector3 = soldier_node.get_meta("formation_destination", soldier_node.position)
+			soldier_node.position = destination
 	var enemy_deployed := mini(_max_visible_soldiers(), 12 + captured * 2)
 	for i in range(enemy_deployed):
 		_spawn_battle_unit(1, i)
@@ -1394,6 +1472,19 @@ func _process(delta: float) -> void:
 		var cooldown := maxf(0.0, float(unit.get("cooldown", 0.0)) - delta)
 		if nearest_distance > 1.8:
 			var direction := (nearest.position - actor.position).normalized()
+			if is_instance_valid(battlefield_systems):
+				var path_timer := maxf(0.0, float(unit.get("path_refresh", 0.0)) - delta)
+				var cached_path: PackedVector3Array = unit.get("path", PackedVector3Array())
+				if path_timer <= 0.0 or cached_path.is_empty():
+					cached_path = battlefield_systems.find_path(actor.position, nearest.position)
+					path_timer = 0.35
+				unit["path"] = cached_path
+				unit["path_refresh"] = path_timer
+				if cached_path.size() > 1:
+					var waypoint_index := 1
+					while waypoint_index < cached_path.size() - 1 and actor.position.distance_to(cached_path[waypoint_index]) < 1.0:
+						waypoint_index += 1
+					direction = (cached_path[waypoint_index] - actor.position).normalized()
 			if side == 1 or battle_order == "advance":
 				actor.position += direction * delta * (2.4 if side == 0 else 2.1)
 				_play_character_animation(actor, "rifle run")
@@ -1406,7 +1497,7 @@ func _process(delta: float) -> void:
 				actor.look_at(Vector3(nearest.position.x, actor.position.y, nearest.position.z), Vector3.UP, true)
 			else:
 				actor.look_at(Vector3(nearest.position.x, actor.position.y, nearest.position.z), Vector3.UP)
-		elif cooldown <= 0.0:
+		elif cooldown <= 0.0 and nearest_distance <= 18.0 and (not is_instance_valid(battlefield_systems) or battlefield_systems.has_line_of_sight(actor.global_position + Vector3.UP, nearest.global_position + Vector3.UP)):
 			_play_character_animation(actor, "rifle fire")
 			for j in range(battle_units.size()):
 				var target: Dictionary = battle_units[j]
@@ -1537,6 +1628,7 @@ func _finish_battle(victory: bool) -> void:
 	soldiers = battle_reserve + survivors
 	if victory:
 		captured += 1
+		_capture_campaign_region()
 		var loot := 1200 + captured * 350
 		coins += loot
 		total_loot += loot
@@ -1632,6 +1724,17 @@ func _load_game() -> void:
 	_update_ui()
 
 func _update_ui() -> void:
+	if campaign_status_label and is_instance_valid(campaign_director):
+		var controlled := 0
+		var rival_count := 0
+		for region_id in campaign_director.territories:
+			var region: Dictionary = campaign_director.territories[region_id]
+			if region_id == "capital":
+				continue
+			rival_count += 1
+			if region.get("owner", "") == "player":
+				controlled += 1
+		campaign_status_label.text = "CAMPAIGN • Turn %d • Territories %d/%d" % [campaign_director.turn_number, controlled, rival_count]
 	if stats_label:
 		var service_summary := "Water %d | Power %d | Health %d | School %d | Police %d | Fire %d" % [service_levels["water"], service_levels["power"], service_levels["health"], service_levels["education"], service_levels["police"], service_levels["fire"]]
 		stats_label.text = "Coins: %d\nSoldiers: %d\nSupplies: %d\nDistricts captured: %d/5\nTotal loot: %d\nServices: %s\nPeople: %d | Happiness: %d%%\nEmergency incidents: %d\nCapital food: %d | Goods: %d | Factory ore: %d\nDelivered F/O/G: %d/%d/%d\nTown 1 stocks: F%d G%d\nCycle: +%d / -%d | Trade: +%d" % [coins, soldiers, supplies, captured, total_loot, service_summary, city_citizens.size(), city_happiness, emergency_incidents, food_stock, goods_stock, factory_ore_stock, delivered_food_total, delivered_ore_total, delivered_goods_total, town_food_stock[0], town_goods_stock[0], last_economy_income, last_economy_expense, last_trade_income]

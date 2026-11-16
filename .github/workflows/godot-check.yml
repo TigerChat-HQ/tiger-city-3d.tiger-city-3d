@@ -14,6 +14,10 @@ on:
       - '.github/workflows/godot-check.yml'
   workflow_dispatch:
 
+concurrency:
+  group: godot-validation-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
 
@@ -33,3 +37,6 @@ jobs:
       - name: Import and parse project scripts
         run: |
           godot-bin/Godot_v4.4.1-stable_linux.x86_64 --headless --editor --path godot --quit
+      - name: Run campaign AI, pathfinding, formations and battle integration tests
+        run: |
+          godot-bin/Godot_v4.4.1-stable_linux.x86_64 --headless --path godot --script res://tests/war_systems_smoke_test.gd
