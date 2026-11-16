@@ -808,37 +808,90 @@ func _start_battle() -> void:
 func _spawn_battle_unit(side: int, index: int) -> void:
 	var unit_node := Node3D.new()
 	unit_node.name = "FriendlySoldier" if side == 0 else "EnemySoldier"
-	var body := MeshInstance3D.new()
-	var body_shape := CapsuleMesh.new()
-	body_shape.radius = 0.38
-	body_shape.height = 1.45
-	body.mesh = body_shape
-	body.position.y = 0.85
-	var body_material := StandardMaterial3D.new()
-	body_material.albedo_color = Color(0.16, 0.34, 0.78) if side == 0 else Color(0.72, 0.16, 0.12)
-	body_material.metallic = 0.18
-	body_material.roughness = 0.62
-	body.material_override = body_material
-	unit_node.add_child(body)
+	var uniform := StandardMaterial3D.new()
+	uniform.albedo_color = Color(0.20, 0.29, 0.22) if side == 0 else Color(0.42, 0.34, 0.24)
+	uniform.roughness = 0.88
+	var skin := StandardMaterial3D.new()
+	skin.albedo_color = Color(0.48, 0.32, 0.23)
+	skin.roughness = 0.94
+	var equipment := StandardMaterial3D.new()
+	equipment.albedo_color = Color(0.10, 0.12, 0.11)
+	equipment.metallic = 0.32
+	equipment.roughness = 0.72
+	var helmet_material := StandardMaterial3D.new()
+	helmet_material.albedo_color = Color(0.16, 0.23, 0.17) if side == 0 else Color(0.31, 0.27, 0.19)
+	helmet_material.roughness = 0.8
+	var torso := MeshInstance3D.new()
+	var torso_mesh := CapsuleMesh.new()
+	torso_mesh.radius = 0.31
+	torso_mesh.height = 0.95
+	torso.mesh = torso_mesh
+	torso.position.y = 1.05
+	torso.material_override = uniform
+	unit_node.add_child(torso)
+	var vest := MeshInstance3D.new()
+	var vest_mesh := BoxMesh.new()
+	vest_mesh.size = Vector3(0.66, 0.58, 0.34)
+	vest.mesh = vest_mesh
+	vest.position = Vector3(0, 1.08, -0.035)
+	vest.material_override = equipment
+	unit_node.add_child(vest)
 	var head := MeshInstance3D.new()
-	var head_shape := SphereMesh.new()
-	head_shape.radius = 0.25
-	head_shape.height = 0.5
-	head.mesh = head_shape
+	var head_mesh := SphereMesh.new()
+	head_mesh.radius = 0.19
+	head_mesh.height = 0.38
+	head.mesh = head_mesh
 	head.position.y = 1.72
-	var head_material := StandardMaterial3D.new()
-	head_material.albedo_color = Color(0.72, 0.53, 0.39)
-	head.material_override = head_material
+	head.material_override = skin
 	unit_node.add_child(head)
-	var weapon := MeshInstance3D.new()
-	var weapon_shape := BoxMesh.new()
-	weapon_shape.size = Vector3(0.12, 0.12, 0.9)
-	weapon.mesh = weapon_shape
-	weapon.position = Vector3(0.42, 1.12, -0.1)
-	var weapon_material := StandardMaterial3D.new()
-	weapon_material.albedo_color = Color(0.18, 0.19, 0.20)
-	weapon.material_override = weapon_material
-	unit_node.add_child(weapon)
+	var helmet := MeshInstance3D.new()
+	var helmet_mesh := SphereMesh.new()
+	helmet_mesh.radius = 0.225
+	helmet_mesh.height = 0.22
+	helmet.mesh = helmet_mesh
+	helmet.position = Vector3(0, 1.88, 0)
+	helmet.material_override = helmet_material
+	unit_node.add_child(helmet)
+	var backpack := MeshInstance3D.new()
+	var pack_mesh := BoxMesh.new()
+	pack_mesh.size = Vector3(0.42, 0.52, 0.25)
+	backpack.mesh = pack_mesh
+	backpack.position = Vector3(0, 1.12, 0.29)
+	backpack.material_override = uniform
+	unit_node.add_child(backpack)
+	for side_offset in [-1.0, 1.0]:
+		var arm := MeshInstance3D.new()
+		var arm_mesh := CapsuleMesh.new()
+		arm_mesh.radius = 0.105
+		arm_mesh.height = 0.72
+		arm.mesh = arm_mesh
+		arm.position = Vector3(side_offset * 0.39, 1.02, -0.05)
+		arm.rotation.z = side_offset * -0.32
+		arm.material_override = uniform
+		unit_node.add_child(arm)
+		var leg := MeshInstance3D.new()
+		var leg_mesh := CapsuleMesh.new()
+		leg_mesh.radius = 0.12
+		leg_mesh.height = 0.78
+		leg.mesh = leg_mesh
+		leg.position = Vector3(side_offset * 0.16, 0.37, 0.02)
+		leg.material_override = uniform
+		unit_node.add_child(leg)
+		var boot := MeshInstance3D.new()
+		var boot_mesh := BoxMesh.new()
+		boot_mesh.size = Vector3(0.22, 0.16, 0.34)
+		boot.mesh = boot_mesh
+		boot.position = Vector3(side_offset * 0.16, 0.08, -0.04)
+		boot.material_override = equipment
+		unit_node.add_child(boot)
+	var rifle := MeshInstance3D.new()
+	var rifle_mesh := BoxMesh.new()
+	rifle_mesh.size = Vector3(0.09, 0.11, 0.95)
+	rifle.mesh = rifle_mesh
+	rifle.position = Vector3(0.30, 1.17, -0.38)
+	rifle.rotation.x = -0.08
+	rifle.material_override = equipment
+	unit_node.add_child(rifle)
 	var column := index % 4
 	var row := index / 4
 	var start_x := -16.0 if side == 0 else 16.0
