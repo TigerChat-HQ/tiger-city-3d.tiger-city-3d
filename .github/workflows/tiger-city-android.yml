@@ -17,12 +17,17 @@ on:
       - "godot/**"
       - ".github/workflows/tiger-city-android.yml"
 
+concurrency:
+  group: tiger-city-android-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
 
 jobs:
   android-apk:
     runs-on: ubuntu-latest
+    timeout-minutes: 60
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -172,14 +177,19 @@ jobs:
           mkdir -p "$RUNNER_TEMP/android"
           keytool -genkeypair -v -keystore "$RUNNER_TEMP/android/debug.keystore" -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
 
-      - name: Import project and export standalone Android APK
+      - name: Import Godot project and generate editor cache
+        timeout-minutes: 15
+        run: |
+          godot-bin/Godot_v4.4.1-stable_linux.x86_64 --headless --editor --editor-settings-path "$HOME/.config/godot" --path godot --quit --verbose
+
+      - name: Export standalone Android APK
+        timeout-minutes: 25
         env:
           GODOT_ANDROID_KEYSTORE_DEBUG_PATH: ${{ runner.temp }}/android/debug.keystore
           GODOT_ANDROID_KEYSTORE_DEBUG_USER: androiddebugkey
           GODOT_ANDROID_KEYSTORE_DEBUG_PASSWORD: android
         run: |
           mkdir -p build
-          godot-bin/Godot_v4.4.1-stable_linux.x86_64 --headless --editor --editor-settings-path "$HOME/.config/godot" --path godot --quit --verbose
           godot-bin/Godot_v4.4.1-stable_linux.x86_64 --headless --path "$GITHUB_WORKSPACE/godot" --export-debug "Android" "$GITHUB_WORKSPACE/build/TIGER_CITY_3D-debug.apk" --verbose
           test -s build/TIGER_CITY_3D-debug.apk
 
