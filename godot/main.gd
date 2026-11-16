@@ -71,7 +71,7 @@ var quality_selector: OptionButton
 var resolution_selector: OptionButton
 var auto_guard_toggle: CheckButton
 var settings_panel: VBoxContainer
-var render_resolution_scale := 0.72
+var render_resolution_scale := 0.7
 
 func _ready() -> void:
 	_build_world()
@@ -564,7 +564,7 @@ func _load_graphics_preferences() -> void:
 	if config.load("user://graphics.cfg") == OK:
 		graphics_quality = clampi(int(config.get_value("graphics", "quality", 0)), 0, 2)
 		auto_performance_guard = bool(config.get_value("graphics", "auto_guard", true))
-		render_resolution_scale = clampf(float(config.get_value("graphics", "resolution_scale", 0.72)), 0.5, 1.0)
+		render_resolution_scale = clampf(float(config.get_value("graphics", "resolution_scale", 0.7)), 0.5, 1.0)
 	if is_instance_valid(quality_selector):
 		quality_selector.select(graphics_quality)
 	if is_instance_valid(auto_guard_toggle):
