@@ -507,6 +507,15 @@ func _build_ui() -> void:
 func _spawn_city_life() -> void:
 	# More human proportions and layered clothing silhouettes than the old toy capsules.
 	for i in range(14):
+		var imported_person := _load_character_asset("res://assets/characters/civilian.glb", "walk")
+		if imported_person != null:
+			imported_person.name = "Civilian_%02d" % i
+			imported_person.scale = Vector3.ONE * 0.92
+			imported_person.position = Vector3(-33.0 + float(i % 7) * 11.0, 0.0, -42.0 + float(i) * 6.0)
+			city_root.add_child(imported_person)
+			city_citizens.append(imported_person)
+			citizen_needs.append({"hunger": 0.0, "health": 80.0, "education": 20.0, "happiness": 72.0})
+			continue
 		var person := Node3D.new()
 		var clothing := StandardMaterial3D.new()
 		clothing.albedo_color = [Color(0.25, 0.34, 0.42), Color(0.43, 0.25, 0.18), Color(0.18, 0.35, 0.27), Color(0.54, 0.46, 0.32)][i % 4]
@@ -1010,7 +1019,44 @@ func _create_battle_tank(side: int) -> Node3D:
 			tank.add_child(road_wheel)
 	return tank
 
+func _load_character_asset(asset_path: String, preferred_animation: String) -> Node3D:
+	if not ResourceLoader.exists(asset_path):
+		return null
+	var packed := load(asset_path) as PackedScene
+	if packed == null:
+		push_warning("Character asset could not be loaded: " + asset_path)
+		return null
+	var character := packed.instantiate() as Node3D
+	if character == null:
+		push_warning("Character scene root must be Node3D: " + asset_path)
+		return null
+	var players := character.find_children("*", "AnimationPlayer", true, false)
+	if not players.is_empty():
+		var animation_player := players[0] as AnimationPlayer
+		var animation_names := animation_player.get_animation_list()
+		var chosen := ""
+		for animation_name in animation_names:
+			if animation_name.to_lower().contains(preferred_animation.to_lower()):
+				chosen = animation_name
+				break
+		if chosen == "" and not animation_names.is_empty():
+			chosen = animation_names[0]
+		if chosen != "":
+			animation_player.play(chosen)
+	return character
+
 func _spawn_battle_unit(side: int, index: int) -> void:
+	var imported_soldier := _load_character_asset("res://assets/characters/soldier.glb", "idle")
+	if imported_soldier != null:
+		imported_soldier.name = "FriendlySoldier" if side == 0 else "EnemySoldier"
+		imported_soldier.scale = Vector3.ONE * 1.0
+		var column := index % 4
+		var row := index / 4
+		var start_x := -16.0 if side == 0 else 16.0
+		imported_soldier.position = Vector3(start_x, 0.0, float(column - 2) * 2.1 + (float(row) - 1.0) * 0.7)
+		battle_root.add_child(imported_soldier)
+		battle_units.append({"node": imported_soldier, "side": side, "hp": 100.0, "cooldown": randf_range(0.1, 0.8), "dead": false, "imported_model": true})
+		return
 	var unit_node := Node3D.new()
 	unit_node.name = "FriendlySoldier" if side == 0 else "EnemySoldier"
 	var uniform := StandardMaterial3D.new()
