@@ -18,14 +18,14 @@ This checklist is evidence-based. A checkmark is added only after the feature is
 - [ ] Release APK is produced and its update/signing continuity is verified.
 
 ## Full game requirements
-- [ ] Replace box-only prototype with a detailed, cinematic 3D city environment and production-quality assets.
+- [ ] Replace remaining box/procedural prototype geometry with high-detail cinematic 3D city assets and production-quality models (partial work: mobile renderer, shadows, procedural surface detail, scanned asphalt/concrete/paving PBR maps, facades, streetlights and street furniture).
 - [ ] Build multiple distinct neighboring cities and a larger strategic world map.
 - [ ] Add robust road-aware building placement, upgrades, zoning, and city progression.
 - [ ] Add a functioning economy: income, expenses, taxes, trade, resources, and supply chains.
 - [ ] Add visible citizens, homes, workplaces, needs, pedestrians, and vehicle traffic.
 - [ ] Add public services and infrastructure: roads, power, water, hospitals, schools, markets, emergency services, and defenses.
 - [ ] Add day/night cycle, weather, lighting, sound, music, and settings.
-- [ ] Add real-time 3D battles with visible soldiers, movement, formations, attacks, defense, casualties, and territory capture.
+- [ ] Complete production-grade real-time 3D battles with animated soldiers, formations, tanks/air/naval units, attacks, defense, casualties, and persistent territory capture (current infantry and tank models remain procedural prototypes).
 - [ ] Add unit classes, recruitment, training, equipment, logistics, and battle AI.
 - [ ] Add campaign objectives, missions, progression, tutorials, and balanced difficulty.
 - [ ] Add Kiswahili and English localization with an in-game language selector.
@@ -34,7 +34,10 @@ This checklist is evidence-based. A checkmark is added only after the feature is
 - [ ] Complete functional, regression, and physical-device testing before public release.
 
 ## Current progress (partial; not release-complete)
-- [x] Android debug APK export, package ID check, signature verification, and artifact upload succeeded for commit `67c0b11` (artifact is a CI debug build, not a production release).
+- [x] Android debug APK export, package ID check, signature verification, and artifact upload succeeded for commit `98080b40739fb4c7051332fb7880c48f5680d321` (artifact is a CI debug build, not a production release).
+- [x] Godot 4.4.1 headless parsing passed for the visual/PBR implementation commit `8d1e25877bdea44b85c33a0538e2df01bb581866` (run `43832791711`).
+- [ ] Android APK build with downloaded CC0 photogrammetry PBR textures and latest changes is still awaiting CI completion (run `43832791599`).
+- [ ] Visual quality has not yet been checked on a physical Android phone; procedural geometry is still not photorealistic production art.
 - [x] Added initial farm, mine, and factory production hubs.
 - [x] Added visible intercity road segments and moving cargo-truck prototypes.
 - [x] Improved prototype citizen meshes with separate torso and head, and truck meshes with cabin and wheels.
