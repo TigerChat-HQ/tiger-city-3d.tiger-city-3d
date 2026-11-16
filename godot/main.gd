@@ -1150,6 +1150,16 @@ func _start_battle() -> void:
 		trench.position = Vector3(trench_side * 10.0, 0.35, -11.5)
 		trench.material_override = battlefield_earth
 		battle_root.add_child(trench)
+		var trench_body := StaticBody3D.new()
+		trench_body.position = trench.position
+		var trench_collision := CollisionShape3D.new()
+		var trench_shape := BoxShape3D.new()
+		trench_shape.size = trench_mesh.size
+		trench_collision.shape = trench_shape
+		trench_body.add_child(trench_collision)
+		battle_root.add_child(trench_body)
+		if is_instance_valid(battlefield_systems):
+			battlefield_systems.cover_objects.append(trench)
 		for bag_index in range(7):
 			var sandbag := MeshInstance3D.new()
 			var bag_mesh := CapsuleMesh.new()
@@ -1462,6 +1472,19 @@ func _process(delta: float) -> void:
 		var cooldown := maxf(0.0, float(unit.get("cooldown", 0.0)) - delta)
 		if nearest_distance > 1.8:
 			var direction := (nearest.position - actor.position).normalized()
+			if is_instance_valid(battlefield_systems):
+				var path_timer := maxf(0.0, float(unit.get("path_refresh", 0.0)) - delta)
+				var cached_path: PackedVector3Array = unit.get("path", PackedVector3Array())
+				if path_timer <= 0.0 or cached_path.is_empty():
+					cached_path = battlefield_systems.find_path(actor.position, nearest.position)
+					path_timer = 0.35
+				unit["path"] = cached_path
+				unit["path_refresh"] = path_timer
+				if cached_path.size() > 1:
+					var waypoint_index := 1
+					while waypoint_index < cached_path.size() - 1 and actor.position.distance_to(cached_path[waypoint_index]) < 1.0:
+						waypoint_index += 1
+					direction = (cached_path[waypoint_index] - actor.position).normalized()
 			if side == 1 or battle_order == "advance":
 				actor.position += direction * delta * (2.4 if side == 0 else 2.1)
 				_play_character_animation(actor, "rifle run")
@@ -1474,7 +1497,7 @@ func _process(delta: float) -> void:
 				actor.look_at(Vector3(nearest.position.x, actor.position.y, nearest.position.z), Vector3.UP, true)
 			else:
 				actor.look_at(Vector3(nearest.position.x, actor.position.y, nearest.position.z), Vector3.UP)
-		elif cooldown <= 0.0:
+		elif cooldown <= 0.0 and nearest_distance <= 18.0 and (not is_instance_valid(battlefield_systems) or battlefield_systems.has_line_of_sight(actor.global_position + Vector3.UP, nearest.global_position + Vector3.UP)):
 			_play_character_animation(actor, "rifle fire")
 			for j in range(battle_units.size()):
 				var target: Dictionary = battle_units[j]
