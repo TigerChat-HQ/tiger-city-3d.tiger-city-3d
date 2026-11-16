@@ -95,11 +95,11 @@ func _build_world() -> void:
 	city_root.name = "GeneratedCity"
 	add_child(city_root)
 	_add_box("Ground", Vector3(0, -0.3, 0), Vector3(100, 0.5, 100), Color(0.20, 0.32, 0.20))
-	_add_city_street_details()
 	for i in range(GRID + 1):
 		var p := (float(i) - GRID / 2.0) * (BLOCK + ROAD)
 		_add_box("RoadX", Vector3(0, 0.02, p), Vector3(100, 0.12, ROAD), Color(0.12, 0.13, 0.15))
 		_add_box("RoadZ", Vector3(p, 0.02, 0), Vector3(ROAD, 0.12, 100), Color(0.12, 0.13, 0.15))
+	_add_city_street_details()
 	var rng := RandomNumberGenerator.new()
 	rng.seed = 303
 	for x in range(GRID):
@@ -346,7 +346,7 @@ func _add_city_street_details() -> void:
 	for x in range(-3, 4):
 		for z in range(-3, 4):
 			if abs(x) == 3 or abs(z) == 3:
-				_continue
+				continue
 			if (x + z) % 2 == 0:
 				_add_streetlight(Vector3(float(x) * (BLOCK + ROAD) + 2.4, 0, float(z) * (BLOCK + ROAD) - 2.4))
 
