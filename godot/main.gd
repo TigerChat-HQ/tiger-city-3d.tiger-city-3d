@@ -62,10 +62,19 @@ var town_goods_stock: Array[int] = [0, 0, 0, 0, 0]
 var delivered_food_total := 0
 var delivered_ore_total := 0
 var delivered_goods_total := 0
+var graphics_quality := 0 # 0=Low, 1=Medium, 2=High
+var auto_performance_guard := true
+var adaptive_load_seconds := 0.0
+var adaptive_recovery_seconds := 0.0
+var smoothed_frame_time := 1.0 / 30.0
+var quality_selector: OptionButton
+var auto_guard_toggle: CheckButton
 
 func _ready() -> void:
 	_build_world()
 	_build_ui()
+	_load_graphics_preferences()
+	_apply_graphics_quality(graphics_quality, false)
 	_load_game()
 	_update_ui()
 	_update_camera()
@@ -453,6 +462,27 @@ func _build_ui() -> void:
 	heading.text = "TIGER CITY 3D"
 	heading.add_theme_font_size_override("font_size", 25)
 	column.add_child(heading)
+	var graphics_row := HBoxContainer.new()
+	column.add_child(graphics_row)
+	var graphics_label := Label.new()
+	graphics_label.text = "GRAPHICS"
+	graphics_row.add_child(graphics_label)
+	quality_selector = OptionButton.new()
+	quality_selector.add_item("LOW", 0)
+	quality_selector.add_item("MEDIUM", 1)
+	quality_selector.add_item("HIGH", 2)
+	quality_selector.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	quality_selector.item_selected.connect(_on_quality_selected)
+	graphics_row.add_child(quality_selector)
+	auto_guard_toggle = CheckButton.new()
+	auto_guard_toggle.text = "AUTO PERFORMANCE GUARD"
+	auto_guard_toggle.button_pressed = true
+	auto_guard_toggle.toggled.connect(_on_auto_guard_toggled)
+	column.add_child(auto_guard_toggle)
+	var offline_label := Label.new()
+	offline_label.text = "OFFLINE READY • Local save on this device"
+	offline_label.add_theme_color_override("font_color", Color(0.35, 0.82, 0.48))
+	column.add_child(offline_label)
 	stats_label = Label.new()
 	column.add_child(stats_label)
 	for pair in [["HOUSE", 0], ["SHOP", 1], ["OFFICE", 2]]:
@@ -503,6 +533,97 @@ func _build_ui() -> void:
 	status_label.text = "Drag to rotate • Pinch to zoom • Select a building, then tap the city."
 	status_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	column.add_child(status_label)
+
+func _load_graphics_preferences() -> void:
+	var config := ConfigFile.new()
+	if config.load("user://graphics.cfg") == OK:
+		graphics_quality = clampi(int(config.get_value("graphics", "quality", 0)), 0, 2)
+		auto_performance_guard = bool(config.get_value("graphics", "auto_guard", true))
+	if is_instance_valid(quality_selector):
+		quality_selector.select(graphics_quality)
+	if is_instance_valid(auto_guard_toggle):
+		auto_guard_toggle.button_pressed = auto_performance_guard
+
+func _save_graphics_preferences() -> void:
+	var config := ConfigFile.new()
+	config.set_value("graphics", "quality", graphics_quality)
+	config.set_value("graphics", "auto_guard", auto_performance_guard)
+	config.save("user://graphics.cfg")
+
+func _max_visible_civilians() -> int:
+	return [5, 9, 14][graphics_quality]
+
+func _max_visible_soldiers() -> int:
+	return [6, 10, 14][graphics_quality]
+
+func _apply_graphics_quality(level: int, announce: bool = true) -> void:
+	graphics_quality = clampi(level, 0, 2)
+	var viewport := get_viewport()
+	viewport.scaling_3d_scale = [0.72, 0.86, 1.0][graphics_quality]
+	viewport.msaa_3d = [Viewport.MSAA_DISABLED, Viewport.MSAA_2X, Viewport.MSAA_2X][graphics_quality]
+	Engine.max_fps = [30, 40, 60][graphics_quality]
+	if is_instance_valid(sun_light):
+		sun_light.shadow_enabled = graphics_quality >= 1
+		sun_light.directional_shadow_mode = DirectionalLight3D.SHADOW_ORTHOGONAL if graphics_quality == 1 else DirectionalLight3D.SHADOW_PARALLEL_2_SPLITS
+	for environment_node in find_children("*", "WorldEnvironment", true, false):
+		var world_env := environment_node as WorldEnvironment
+		if world_env.environment:
+			world_env.environment.glow_enabled = graphics_quality >= 2
+	for mesh_node in find_children("*", "MeshInstance3D", true, false):
+		var mesh_instance := mesh_node as MeshInstance3D
+		var material := mesh_instance.material_override
+		if material is BaseMaterial3D:
+			material.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR if graphics_quality == 0 else BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
+	for i in range(city_citizens.size()):
+		if is_instance_valid(city_citizens[i]):
+			city_citizens[i].visible = i < _max_visible_civilians()
+	var visible_per_side := {0: 0, 1: 0}
+	for unit in battle_units:
+		var side := int(unit.get("side", 0))
+		var actor := unit.get("node") as Node3D
+		if is_instance_valid(actor):
+			var show_unit := int(visible_per_side[side]) < _max_visible_soldiers()
+			actor.visible = show_unit and not bool(unit.get("dead", false))
+			if show_unit:
+				visible_per_side[side] = int(visible_per_side[side]) + 1
+	if is_instance_valid(quality_selector):
+		quality_selector.select(graphics_quality)
+	if announce and is_instance_valid(status_label):
+		status_label.text = "Graphics: %s. Max visible soldiers per side: %d." % [["LOW", "MEDIUM", "HIGH"][graphics_quality], _max_visible_soldiers()]
+
+func _on_quality_selected(index: int) -> void:
+	_apply_graphics_quality(index)
+	_save_graphics_preferences()
+
+func _on_auto_guard_toggled(enabled: bool) -> void:
+	auto_performance_guard = enabled
+	adaptive_load_seconds = 0.0
+	adaptive_recovery_seconds = 0.0
+	_save_graphics_preferences()
+
+func _update_auto_performance_guard(delta: float) -> void:
+	# Godot GDScript has no portable Android battery-temperature API. This guard
+	# uses sustained frame-time pressure as a safe load/heat proxy, not a sensor.
+	smoothed_frame_time = lerpf(smoothed_frame_time, delta, 0.08)
+	if not auto_performance_guard or graphics_quality == 0:
+		adaptive_load_seconds = 0.0
+		return
+	if smoothed_frame_time > 0.040:
+		adaptive_load_seconds += delta
+		adaptive_recovery_seconds = 0.0
+		if adaptive_load_seconds >= 5.0:
+			_apply_graphics_quality(graphics_quality - 1)
+			adaptive_load_seconds = 0.0
+			status_label.text = "Auto guard reduced graphics due to sustained device load."
+	elif smoothed_frame_time < 0.026:
+		adaptive_recovery_seconds += delta
+		adaptive_load_seconds = 0.0
+		if adaptive_recovery_seconds >= 30.0 and graphics_quality < 2:
+			_apply_graphics_quality(graphics_quality + 1)
+			adaptive_recovery_seconds = 0.0
+	else:
+		adaptive_load_seconds = 0.0
+		adaptive_recovery_seconds = 0.0
 
 func _spawn_city_life() -> void:
 	# More human proportions and layered clothing silhouettes than the old toy capsules.
@@ -636,6 +757,7 @@ func _update_city_life(delta: float) -> void:
 	for i in range(city_citizens.size()):
 		var person := city_citizens[i]
 		if is_instance_valid(person):
+			person.visible = i < _max_visible_civilians()
 			person.position.z += delta * (0.65 + float(i % 4) * 0.12)
 			if person.position.z > 48.0:
 				person.position.z = -48.0
@@ -951,10 +1073,12 @@ func _start_battle() -> void:
 		line_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 		line.material_override = line_material
 		battle_root.add_child(line)
-	var deployed := mini(12, soldiers)
+	var deployed := mini(_max_visible_soldiers(), soldiers)
+	battle_reserve = maxi(0, soldiers - deployed)
 	for i in range(deployed):
 		_spawn_battle_unit(0, i)
-	for i in range(12 + captured * 2):
+	var enemy_deployed := mini(_max_visible_soldiers(), 12 + captured * 2)
+	for i in range(enemy_deployed):
 		_spawn_battle_unit(1, i)
 	camera_target = Vector3.ZERO
 	camera_distance = 43.0
@@ -1183,6 +1307,7 @@ func _spawn_battle_unit(side: int, index: int) -> void:
 	battle_units.append({"node": unit_node, "side": side, "hp": 100.0, "cooldown": randf_range(0.1, 0.8), "dead": false})
 
 func _process(delta: float) -> void:
+	_update_auto_performance_guard(delta)
 	_update_city_life(delta)
 	if not battle_active:
 		return
