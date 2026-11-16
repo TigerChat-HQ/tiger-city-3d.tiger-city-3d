@@ -1,0 +1,58 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+APK_PATH="${1:?Usage: android-emulator-smoke-test.sh path/to.apk}"
+PACKAGE="com.tigerchat.tigercity3d"
+SCREENSHOT="/tmp/tiger-city-launch.png"
+
+test -s "$APK_PATH"
+adb wait-for-device
+adb install -r "$APK_PATH"
+
+# Verify the local single-player build can cold-launch without network access.
+adb shell svc wifi disable || true
+adb shell svc data disable || true
+
+launch_and_check() {
+  adb shell monkey -p "$PACKAGE" 1 >/dev/null
+  for attempt in $(seq 1 40); do
+    if adb shell pidof "$PACKAGE" >/dev/null 2>&1; then
+      break
+    fi
+    sleep 1
+  done
+  adb shell pidof "$PACKAGE" >/dev/null
+  sleep 20
+  adb shell dumpsys activity activities | grep -E 'mResumedActivity|topResumedActivity' | grep -q "$PACKAGE"
+  adb exec-out screencap -p > "$SCREENSHOT"
+  test -s "$SCREENSHOT"
+  python3 -m pip install --quiet --break-system-packages pillow
+  python3 - "$SCREENSHOT" <<'PY'
+import sys
+from PIL import Image, ImageStat
+im = Image.open(sys.argv[1]).convert("RGB")
+w, h = im.size
+assert w > h, f"Expected landscape launch, got {w}x{h}"
+im = im.crop((int(w*.08), int(h*.08), int(w*.92), int(h*.92)))
+pixels = list(im.resize((160, 90)).getdata())
+white = sum(1 for p in pixels if min(p) >= 245) / len(pixels)
+black = sum(1 for p in pixels if max(p) <= 10) / len(pixels)
+colors = len(set(pixels))
+stddev = sum(ImageStat.Stat(im).stddev) / 3
+print(f"Launch screenshot: {w}x{h}; sampled colors={colors}; mean channel stddev={stddev:.1f}; white={white:.3%}; black={black:.3%}")
+assert colors > 30 and stddev > 8, "Screen appears blank or nearly uniform"
+assert white < .995 and black < .995, "Screen is almost entirely white or black"
+PY
+}
+
+echo "Offline cold launch (Wi-Fi and mobile data disabled)"
+launch_and_check
+echo "Background/resume cycle"
+adb shell input keyevent 3
+sleep 3
+launch_and_check
+echo "Force-stop and cold relaunch"
+adb shell am force-stop "$PACKAGE"
+sleep 2
+launch_and_check
+echo "Offline launch and Android launch/UI smoke tests passed."
