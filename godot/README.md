@@ -23,6 +23,6 @@ Godot is open source and does not require a Unity Personal license. The official
 The Android editor is experimental, has a touch UI that is not fully optimized, and may behave differently across devices. For Android export, install the matching export templates and configure an Android export preset in the editor. Godot's Android editor does not need the user to install Android SDK or OpenJDK for its Android export path. See the [official Android export guide](https://docs.godotengine.org/en/stable/tutorials/export/exporting_for_android.html).
 
 ## Validation and limitations
-A GitHub Actions workflow now opens the project in Godot headlessly to catch import and script parse errors. This check is not an APK build or a physical-device test. No APK has been built or device-tested yet.
+GitHub Actions has successfully imported and parsed the Godot project and exported a standalone Android debug APK. The APK package ID and signature were verified by CI, and artifact `TIGER-CITY-3D-Android-debug` was uploaded from run `43608570844`. This is a temporary CI debug signature, not a permanent release signing identity. The APK has not yet been installed or tested on a physical Android phone.
 
 This remains an early greybox prototype, not a complete engine migration. Production visuals, robust placement collision/road checks, persistent campaign balancing, real-time combat, audio, accessibility, optimization, Android export configuration, signing, and testing remain outstanding.
