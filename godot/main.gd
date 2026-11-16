@@ -507,7 +507,8 @@ func _build_ui() -> void:
 func _spawn_city_life() -> void:
 	# More human proportions and layered clothing silhouettes than the old toy capsules.
 	for i in range(14):
-		var imported_person := _load_character_asset("res://assets/characters/civilian.glb", "walk")
+		var civilian_variant := (i % 3) + 1
+		var imported_person := _load_character_asset("res://assets/characters/civilian_%02d.glb" % civilian_variant, "walk")
 		if imported_person != null:
 			imported_person.name = "Civilian_%02d" % i
 			imported_person.scale = Vector3.ONE * 0.92
@@ -1033,20 +1034,41 @@ func _load_character_asset(asset_path: String, preferred_animation: String) -> N
 	var players := character.find_children("*", "AnimationPlayer", true, false)
 	if not players.is_empty():
 		var animation_player := players[0] as AnimationPlayer
-		var animation_names := animation_player.get_animation_list()
-		var chosen := ""
-		for animation_name in animation_names:
-			if animation_name.to_lower().contains(preferred_animation.to_lower()):
-				chosen = animation_name
-				break
-		if chosen == "" and not animation_names.is_empty():
-			chosen = animation_names[0]
-		if chosen != "":
-			animation_player.play(chosen)
+		character.set_meta("tiger_animation_player", animation_player)
+		for animation_name in animation_player.get_animation_list():
+			var clip := animation_player.get_animation(animation_name)
+			var lower_name := animation_name.to_lower()
+			if lower_name.contains("idle") or lower_name.contains("walk") or lower_name.contains("run") or lower_name.contains("strafe"):
+				clip.loop_mode = Animation.LOOP_LINEAR
+			else:
+				clip.loop_mode = Animation.LOOP_NONE
+		_play_character_animation(character, preferred_animation)
 	return character
 
+func _play_character_animation(actor: Node3D, action: String) -> void:
+	if not is_instance_valid(actor) or not actor.has_meta("tiger_animation_player"):
+		return
+	var animation_player := actor.get_meta("tiger_animation_player") as AnimationPlayer
+	if not is_instance_valid(animation_player):
+		return
+	var requested := action.to_lower()
+	var selected := ""
+	var fallback := ""
+	for animation_name in animation_player.get_animation_list():
+		var lower_name := animation_name.to_lower()
+		if fallback == "" and lower_name.contains("idle"):
+			fallback = animation_name
+		if lower_name.contains(requested):
+			selected = animation_name
+			break
+	if selected == "":
+		selected = fallback
+	if selected == "" or animation_player.current_animation == selected:
+		return
+	animation_player.play(selected, 0.18)
+
 func _spawn_battle_unit(side: int, index: int) -> void:
-	var imported_soldier := _load_character_asset("res://assets/characters/soldier.glb", "idle")
+	var imported_soldier := _load_character_asset("res://assets/characters/soldier.glb", "rifle idle")
 	if imported_soldier != null:
 		imported_soldier.name = "FriendlySoldier" if side == 0 else "EnemySoldier"
 		imported_soldier.scale = Vector3.ONE * 1.0
@@ -1189,10 +1211,15 @@ func _process(delta: float) -> void:
 			var direction := (nearest.position - actor.position).normalized()
 			if side == 1 or battle_order == "advance":
 				actor.position += direction * delta * (2.4 if side == 0 else 2.1)
+				_play_character_animation(actor, "run")
 			elif side == 0 and battle_order == "retreat":
 				actor.position -= direction * delta * 3.0
+				_play_character_animation(actor, "run")
+			else:
+				_play_character_animation(actor, "rifle idle")
 			actor.look_at(Vector3(nearest.position.x, actor.position.y, nearest.position.z), Vector3.UP)
 		elif cooldown <= 0.0:
+			_play_character_animation(actor, "rifle fire")
 			for j in range(battle_units.size()):
 				var target: Dictionary = battle_units[j]
 				if target.get("node") == nearest and not bool(target.get("dead", false)):
