@@ -8,6 +8,7 @@ on:
       - feat/standalone-android-app
     paths:
       - "godot/**"
+      - "scripts/android-emulator-smoke-test.sh"
       - ".github/workflows/tiger-city-android.yml"
   push:
     branches:
