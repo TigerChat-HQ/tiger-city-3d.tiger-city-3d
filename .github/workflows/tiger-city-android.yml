@@ -6,6 +6,7 @@ on:
     branches:
       - migration/godot-android-prototype
       - feat/standalone-android-app
+      - feat/tactical-live-battle-orders
     paths:
       - "godot/**"
       - "scripts/android-emulator-smoke-test.sh"
