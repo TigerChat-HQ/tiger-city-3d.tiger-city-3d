@@ -9,6 +9,10 @@ test -s "$APK_PATH"
 adb wait-for-device
 adb install -r "$APK_PATH"
 
+# Verify the local single-player build can cold-launch without network access.
+adb shell svc wifi disable || true
+adb shell svc data disable || true
+
 launch_and_check() {
   adb shell monkey -p "$PACKAGE" 1 >/dev/null
   for attempt in $(seq 1 40); do
@@ -41,7 +45,7 @@ assert white < .995 and black < .995, "Screen is almost entirely white or black"
 PY
 }
 
-echo "First cold launch"
+echo "Offline cold launch (Wi-Fi and mobile data disabled)"
 launch_and_check
 echo "Background/resume cycle"
 adb shell input keyevent 3
@@ -51,4 +55,4 @@ echo "Force-stop and cold relaunch"
 adb shell am force-stop "$PACKAGE"
 sleep 2
 launch_and_check
-echo "Android launch/UI smoke tests passed."
+echo "Offline launch and Android launch/UI smoke tests passed."
