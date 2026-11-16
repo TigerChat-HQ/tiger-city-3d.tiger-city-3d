@@ -8,6 +8,7 @@ on:
       - feat/standalone-android-app
     paths:
       - "godot/**"
+      - "scripts/android-emulator-smoke-test.sh"
       - ".github/workflows/tiger-city-android.yml"
   push:
     branches:
@@ -16,12 +17,17 @@ on:
       - "godot/**"
       - ".github/workflows/tiger-city-android.yml"
 
+concurrency:
+  group: tiger-city-android-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: false
+
 permissions:
   contents: read
 
 jobs:
   android-apk:
     runs-on: ubuntu-latest
+    timeout-minutes: 60
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -32,6 +38,85 @@ jobs:
           distribution: temurin
           java-version: "17"
 
+      - name: Set up Node.js 22 for character asset generation
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Generate realistic rigged character assets and animations
+        env:
+          ARA_DIR: ${{ runner.temp }}/ara-3d-gen
+          CHARACTER_OUT: ${{ runner.temp }}/tiger-characters
+        run: |
+          git clone --depth 1 https://github.com/TuriaArt/3d-gen-TU.git "$ARA_DIR"
+          cd "$ARA_DIR"
+          npm ci
+          npm run setup-assets
+          mkdir -p "$CHARACTER_OUT" "$RUNNER_TEMP/tiger-character-params"
+          node --import tsx --input-type=module <<'NODE'
+          import { writeFileSync } from 'node:fs';
+          import { join } from 'node:path';
+          import { DEFAULT_PARAMS, PRESETS } from './src/core/params.ts';
+          const specs = [
+            ['soldier', 'The Soldier', 'medium', 'rifle'],
+            ['civilian_01', 'Athletic man', 'medium', 'none'],
+            ['civilian_02', 'Businesswoman', 'medium', 'none'],
+            ['civilian_03', 'Elder', 'medium', 'none'],
+          ];
+          for (const [name, preset, detail, weapon] of specs) {
+            if (!PRESETS[preset]) throw new Error('Missing Ara preset: ' + preset);
+            const params = {
+              ...DEFAULT_PARAMS,
+              ...PRESETS[preset],
+              name,
+              detail,
+              rig: 'game',
+              restPose: 'T',
+              animations: true,
+              weapon,
+            };
+            writeFileSync(join(process.env.RUNNER_TEMP, 'tiger-character-params', name + '.json'), JSON.stringify(params));
+          }
+          NODE
+          for name in soldier civilian_01 civilian_02 civilian_03; do
+            npm run export -- --params "$RUNNER_TEMP/tiger-character-params/$name.json" --formats glb --out "$CHARACTER_OUT"
+            test -s "$CHARACTER_OUT/$name.glb"
+          done
+          mkdir -p "$GITHUB_WORKSPACE/godot/assets/characters"
+          cp "$CHARACTER_OUT/soldier.glb" "$GITHUB_WORKSPACE/godot/assets/characters/soldier.glb"
+          for n in 01 02 03; do
+            cp "$CHARACTER_OUT/civilian_$n.glb" "$GITHUB_WORKSPACE/godot/assets/characters/civilian_$n.glb"
+          done
+          cp scripts/ASSETS_LICENSE.txt "$GITHUB_WORKSPACE/godot/assets/characters/MAKEHUMAN-CC0-LICENSE.txt"
+          ls -lh "$GITHUB_WORKSPACE/godot/assets/characters"
+          cd "$GITHUB_WORKSPACE"
+          python - <<'PY'
+          import json, pathlib, struct
+          root = pathlib.Path("godot/assets/characters")
+          def read_glb(path):
+              data = path.read_bytes()
+              magic, version, total = struct.unpack_from("<4sII", data, 0)
+              assert magic == b"glTF" and version == 2 and total == len(data), f"Invalid GLB header: {path}"
+              json_len, json_type = struct.unpack_from("<I4s", data, 12)
+              assert json_type == b"JSON", f"Missing GLB JSON chunk: {path}"
+              return json.loads(data[20:20 + json_len])
+          soldier = read_glb(root / "soldier.glb")
+          assert soldier.get("skins"), "Soldier GLB has no rig/skeleton"
+          assert soldier.get("images"), "Soldier GLB has no embedded texture images"
+          clips = {a.get("name", "") for a in soldier.get("animations", [])}
+          required = {"Idle", "Walk", "Run", "Rifle idle (low ready)", "Rifle fire (single)", "Rifle reload", "Hit reaction", "Death (fall forward)"}
+          missing = sorted(required - clips)
+          assert not missing, f"Soldier GLB is missing required clips: {missing}"
+          for name in ("civilian_01", "civilian_02", "civilian_03"):
+              doc = read_glb(root / f"{name}.glb")
+              assert doc.get("skins"), f"{name} has no rig"
+              civ_clips = {a.get("name", "") for a in doc.get("animations", [])}
+              assert {"Walk", "Run"}.issubset(civ_clips), f"{name} missing walk/run clips"
+          print(f"Soldier: {len(soldier.get('meshes', []))} mesh(es), {len(soldier.get('images', []))} embedded images, {len(clips)} animation clips")
+          print("All three civilian GLBs contain rigs and walk/run clips.")
+          PY
+          cd "$GITHUB_WORKSPACE"
+
       - name: Install Android SDK packages
         run: |
           export ANDROID_HOME="/usr/local/lib/android/sdk"
@@ -41,6 +126,17 @@ jobs:
           "$SDKMANAGER" "platform-tools" "platforms;android-34" "build-tools;34.0.0" "cmdline-tools;latest" "cmake;3.10.2.4988404" "ndk;23.2.8568313"
           echo "ANDROID_HOME=$ANDROID_HOME" >> "$GITHUB_ENV"
           echo "ANDROID_SDK_ROOT=$ANDROID_HOME" >> "$GITHUB_ENV"
+
+      - name: Download CC0 photogrammetry PBR materials
+        run: |
+          mkdir -p godot/assets/materials/Asphalt032 godot/assets/materials/Concrete049 godot/assets/materials/PavingStones135
+          curl -L --fail --retry 3 "https://ambientcg.com/get?file=Asphalt032_1K-JPG.zip" -o "$RUNNER_TEMP/asphalt.zip"
+          curl -L --fail --retry 3 "https://ambientcg.com/get?file=Concrete049_1K-JPG.zip" -o "$RUNNER_TEMP/concrete.zip"
+          curl -L --fail --retry 3 "https://ambientcg.com/get?file=PavingStones135_1K-JPG.zip" -o "$RUNNER_TEMP/paving.zip"
+          unzip -q -o "$RUNNER_TEMP/asphalt.zip" -d godot/assets/materials/Asphalt032
+          unzip -q -o "$RUNNER_TEMP/concrete.zip" -d godot/assets/materials/Concrete049
+          unzip -q -o "$RUNNER_TEMP/paving.zip" -d godot/assets/materials/PavingStones135
+          find godot/assets/materials -type f | sort
 
       - name: Download Godot 4.4.1 editor and Android export templates
         run: |
@@ -81,14 +177,19 @@ jobs:
           mkdir -p "$RUNNER_TEMP/android"
           keytool -genkeypair -v -keystore "$RUNNER_TEMP/android/debug.keystore" -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
 
-      - name: Import project and export standalone Android APK
+      - name: Import Godot project and generate editor cache
+        timeout-minutes: 15
+        run: |
+          godot-bin/Godot_v4.4.1-stable_linux.x86_64 --headless --editor --editor-settings-path "$HOME/.config/godot" --path godot --quit --verbose
+
+      - name: Export standalone Android APK
+        timeout-minutes: 25
         env:
           GODOT_ANDROID_KEYSTORE_DEBUG_PATH: ${{ runner.temp }}/android/debug.keystore
           GODOT_ANDROID_KEYSTORE_DEBUG_USER: androiddebugkey
           GODOT_ANDROID_KEYSTORE_DEBUG_PASSWORD: android
         run: |
           mkdir -p build
-          godot-bin/Godot_v4.4.1-stable_linux.x86_64 --headless --editor --editor-settings-path "$HOME/.config/godot" --path godot --quit --verbose
           godot-bin/Godot_v4.4.1-stable_linux.x86_64 --headless --path "$GITHUB_WORKSPACE/godot" --export-debug "Android" "$GITHUB_WORKSPACE/build/TIGER_CITY_3D-debug.apk" --verbose
           test -s build/TIGER_CITY_3D-debug.apk
 
@@ -96,6 +197,16 @@ jobs:
         run: |
           "$ANDROID_HOME/build-tools/34.0.0/aapt" dump badging build/TIGER_CITY_3D-debug.apk | grep "package: name='com.tigerchat.tigercity3d'"
           "$ANDROID_HOME/build-tools/34.0.0/apksigner" verify build/TIGER_CITY_3D-debug.apk
+
+      - name: Run Android emulator launch and blank-screen smoke tests
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 34
+          target: google_apis
+          arch: x86_64
+          profile: pixel_2
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim
+          script: bash scripts/android-emulator-smoke-test.sh build/TIGER_CITY_3D-debug.apk
 
       - name: Upload standalone APK
         uses: actions/upload-artifact@v4
