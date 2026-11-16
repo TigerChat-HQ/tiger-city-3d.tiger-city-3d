@@ -4,7 +4,7 @@ const CampaignScript = preload("res://scripts/campaign_director.gd")
 const BattlefieldScript = preload("res://scripts/battlefield_systems.gd")
 
 func _initialize() -> void:
-	call_deferred("_run_tests")
+	_run_tests()
 
 func _check(condition: bool, message: String) -> void:
 	if not condition:
