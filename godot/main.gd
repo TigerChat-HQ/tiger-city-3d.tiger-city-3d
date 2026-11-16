@@ -68,7 +68,10 @@ var adaptive_load_seconds := 0.0
 var adaptive_recovery_seconds := 0.0
 var smoothed_frame_time := 1.0 / 30.0
 var quality_selector: OptionButton
+var resolution_selector: OptionButton
 var auto_guard_toggle: CheckButton
+var settings_panel: VBoxContainer
+var render_resolution_scale := 0.72
 
 func _ready() -> void:
 	_build_world()
@@ -462,8 +465,15 @@ func _build_ui() -> void:
 	heading.text = "TIGER CITY 3D"
 	heading.add_theme_font_size_override("font_size", 25)
 	column.add_child(heading)
+	var settings_button := Button.new()
+	settings_button.text = "GAME SETTINGS"
+	settings_button.pressed.connect(_toggle_game_settings)
+	column.add_child(settings_button)
+	settings_panel = VBoxContainer.new()
+	settings_panel.visible = false
+	column.add_child(settings_panel)
 	var graphics_row := HBoxContainer.new()
-	column.add_child(graphics_row)
+	settings_panel.add_child(graphics_row)
 	var graphics_label := Label.new()
 	graphics_label.text = "GRAPHICS"
 	graphics_row.add_child(graphics_label)
@@ -474,11 +484,26 @@ func _build_ui() -> void:
 	quality_selector.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	quality_selector.item_selected.connect(_on_quality_selected)
 	graphics_row.add_child(quality_selector)
+	var resolution_row := HBoxContainer.new()
+	settings_panel.add_child(resolution_row)
+	var resolution_label := Label.new()
+	resolution_label.text = "3D RESOLUTION"
+	resolution_row.add_child(resolution_label)
+	resolution_selector = OptionButton.new()
+	for percent in [50, 60, 70, 80, 90, 100]:
+		resolution_selector.add_item("%d%%" % percent, percent)
+	resolution_selector.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	resolution_selector.item_selected.connect(_on_resolution_selected)
+	resolution_row.add_child(resolution_selector)
 	auto_guard_toggle = CheckButton.new()
-	auto_guard_toggle.text = "AUTO PERFORMANCE GUARD"
+	auto_guard_toggle.text = "AUTO GRAPHICS (LOAD GUARD)"
 	auto_guard_toggle.button_pressed = true
 	auto_guard_toggle.toggled.connect(_on_auto_guard_toggled)
-	column.add_child(auto_guard_toggle)
+	settings_panel.add_child(auto_guard_toggle)
+	var apply_settings_button := Button.new()
+	apply_settings_button.text = "APPLY SETTINGS"
+	apply_settings_button.pressed.connect(_apply_settings_and_close)
+	settings_panel.add_child(apply_settings_button)
 	var offline_label := Label.new()
 	offline_label.text = "OFFLINE READY • Local save on this device"
 	offline_label.add_theme_color_override("font_color", Color(0.35, 0.82, 0.48))
@@ -539,15 +564,20 @@ func _load_graphics_preferences() -> void:
 	if config.load("user://graphics.cfg") == OK:
 		graphics_quality = clampi(int(config.get_value("graphics", "quality", 0)), 0, 2)
 		auto_performance_guard = bool(config.get_value("graphics", "auto_guard", true))
+		render_resolution_scale = clampf(float(config.get_value("graphics", "resolution_scale", 0.72)), 0.5, 1.0)
 	if is_instance_valid(quality_selector):
 		quality_selector.select(graphics_quality)
 	if is_instance_valid(auto_guard_toggle):
 		auto_guard_toggle.button_pressed = auto_performance_guard
+	if is_instance_valid(resolution_selector):
+		var resolution_index := clampi(int(round(render_resolution_scale * 100.0)) / 10 - 5, 0, 5)
+		resolution_selector.select(resolution_index)
 
 func _save_graphics_preferences() -> void:
 	var config := ConfigFile.new()
 	config.set_value("graphics", "quality", graphics_quality)
 	config.set_value("graphics", "auto_guard", auto_performance_guard)
+	config.set_value("graphics", "resolution_scale", render_resolution_scale)
 	config.save("user://graphics.cfg")
 
 func _max_visible_civilians() -> int:
@@ -559,7 +589,7 @@ func _max_visible_soldiers() -> int:
 func _apply_graphics_quality(level: int, announce: bool = true) -> void:
 	graphics_quality = clampi(level, 0, 2)
 	var viewport := get_viewport()
-	viewport.scaling_3d_scale = [0.72, 0.86, 1.0][graphics_quality]
+	viewport.scaling_3d_scale = render_resolution_scale
 	viewport.msaa_3d = [Viewport.MSAA_DISABLED, Viewport.MSAA_2X, Viewport.MSAA_2X][graphics_quality]
 	Engine.max_fps = [30, 40, 60][graphics_quality]
 	if is_instance_valid(sun_light):
@@ -591,9 +621,29 @@ func _apply_graphics_quality(level: int, announce: bool = true) -> void:
 	if announce and is_instance_valid(status_label):
 		status_label.text = "Graphics: %s. Max visible soldiers per side: %d." % [["LOW", "MEDIUM", "HIGH"][graphics_quality], _max_visible_soldiers()]
 
+func _toggle_game_settings() -> void:
+	if is_instance_valid(settings_panel):
+		settings_panel.visible = not settings_panel.visible
+
 func _on_quality_selected(index: int) -> void:
 	_apply_graphics_quality(index)
 	_save_graphics_preferences()
+
+func _on_resolution_selected(index: int) -> void:
+	if not is_instance_valid(resolution_selector):
+		return
+	render_resolution_scale = clampf(float(resolution_selector.get_item_id(index)) / 100.0, 0.5, 1.0)
+	get_viewport().scaling_3d_scale = render_resolution_scale
+	_save_graphics_preferences()
+	if is_instance_valid(status_label):
+		status_label.text = "3D resolution set to %d%%." % int(round(render_resolution_scale * 100.0))
+
+func _apply_settings_and_close() -> void:
+	_save_graphics_preferences()
+	if is_instance_valid(settings_panel):
+		settings_panel.visible = false
+	if is_instance_valid(status_label):
+		status_label.text = "Game settings applied and saved on this device."
 
 func _on_auto_guard_toggled(enabled: bool) -> void:
 	auto_performance_guard = enabled
