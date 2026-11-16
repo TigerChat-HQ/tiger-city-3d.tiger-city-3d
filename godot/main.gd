@@ -866,6 +866,35 @@ func _start_battle() -> void:
 	floor_material.albedo_color = Color(0.24, 0.29, 0.20)
 	floor_mesh.material_override = floor_material
 	battle_root.add_child(floor_mesh)
+	# Battlefield props: defensive earthworks, cover, and heavy armour give combat a real scale.
+	var battlefield_earth := StandardMaterial3D.new()
+	battlefield_earth.albedo_color = Color(0.30, 0.27, 0.20)
+	battlefield_earth.roughness = 1.0
+	for trench_side in [-1.0, 1.0]:
+		var trench := MeshInstance3D.new()
+		var trench_mesh := BoxMesh.new()
+		trench_mesh.size = Vector3(10.0, 1.0, 1.4)
+		trench.mesh = trench_mesh
+		trench.position = Vector3(trench_side * 10.0, 0.35, -11.5)
+		trench.material_override = battlefield_earth
+		battle_root.add_child(trench)
+		for bag_index in range(7):
+			var sandbag := MeshInstance3D.new()
+			var bag_mesh := CapsuleMesh.new()
+			bag_mesh.radius = 0.28
+			bag_mesh.height = 0.85
+			sandbag.mesh = bag_mesh
+			sandbag.rotation_degrees.z = 90
+			sandbag.position = Vector3(trench_side * 10.0 + float(bag_index - 3) * 1.1, 0.72, -10.55)
+			sandbag.material_override = battlefield_earth
+			battle_root.add_child(sandbag)
+	var friendly_tank := _create_battle_tank(0)
+	friendly_tank.position = Vector3(-13.0, 0.0, 8.0)
+	battle_root.add_child(friendly_tank)
+	var enemy_tank := _create_battle_tank(1)
+	enemy_tank.position = Vector3(13.0, 0.0, -8.0)
+	enemy_tank.rotation.y = PI
+	battle_root.add_child(enemy_tank)
 	for row in range(5):
 		var line := MeshInstance3D.new()
 		var line_mesh := BoxMesh.new()
@@ -889,6 +918,62 @@ func _start_battle() -> void:
 	_update_camera()
 	status_label.text = "Battle started! Choose ADVANCE, HOLD or RETREAT. Air support costs 900 coins."
 	_update_ui()
+
+func _create_battle_tank(side: int) -> Node3D:
+	var tank := Node3D.new()
+	var armour := StandardMaterial3D.new()
+	armour.albedo_color = Color(0.19, 0.25, 0.18) if side == 0 else Color(0.36, 0.30, 0.20)
+	armour.roughness = 0.82
+	armour.metallic = 0.38
+	var dark := StandardMaterial3D.new()
+	dark.albedo_color = Color(0.055, 0.065, 0.055)
+	dark.roughness = 0.96
+	var hull := MeshInstance3D.new()
+	var hull_mesh := BoxMesh.new()
+	hull_mesh.size = Vector3(4.2, 1.05, 2.55)
+	hull.mesh = hull_mesh
+	hull.position.y = 1.05
+	hull.material_override = armour
+	tank.add_child(hull)
+	var turret := MeshInstance3D.new()
+	var turret_mesh := CylinderMesh.new()
+	turret_mesh.top_radius = 0.95
+	turret_mesh.bottom_radius = 1.12
+	turret_mesh.height = 0.72
+	turret.mesh = turret_mesh
+	turret.position = Vector3(0, 1.88, 0)
+	turret.material_override = armour
+	tank.add_child(turret)
+	var barrel := MeshInstance3D.new()
+	var barrel_mesh := CylinderMesh.new()
+	barrel_mesh.top_radius = 0.12
+	barrel_mesh.bottom_radius = 0.16
+	barrel_mesh.height = 2.5
+	barrel.mesh = barrel_mesh
+	barrel.rotation.x = PI * 0.5
+	barrel.position = Vector3(0, 1.93, -1.48)
+	barrel.material_override = dark
+	tank.add_child(barrel)
+	for side_offset in [-1.0, 1.0]:
+		var track := MeshInstance3D.new()
+		var track_mesh := BoxMesh.new()
+		track_mesh.size = Vector3(4.45, 0.72, 0.48)
+		track.mesh = track_mesh
+		track.position = Vector3(0, 0.52, side_offset * 1.48)
+		track.material_override = dark
+		tank.add_child(track)
+		for wheel_index in range(5):
+			var road_wheel := MeshInstance3D.new()
+			var wheel_mesh := CylinderMesh.new()
+			wheel_mesh.top_radius = 0.34
+			wheel_mesh.bottom_radius = 0.34
+			wheel_mesh.height = 0.16
+			road_wheel.mesh = wheel_mesh
+			road_wheel.rotation_degrees.z = 90
+			road_wheel.position = Vector3(-1.65 + float(wheel_index) * 0.82, 0.5, side_offset * 1.75)
+			road_wheel.material_override = armour
+			tank.add_child(road_wheel)
+	return tank
 
 func _spawn_battle_unit(side: int, index: int) -> void:
 	var unit_node := Node3D.new()
