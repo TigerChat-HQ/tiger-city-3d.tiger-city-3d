@@ -1,50 +1,36 @@
 # TIGER CITY 3D
 
-A realistic 3D city-building game targeting Android.
+TIGER CITY 3D is an Android-first 3D city-building and strategy game built with **Godot 4**. Godot is the only supported game engine for active development; Unity project files and Unity build workflows are not part of this development line.
 
-## Vision
-- Ultra-realistic cinematic 3D as the visual target, subject to Android performance budgets.
-- Build homes, shops, offices, roads, and civic services.
-- Vehicles, pedestrians, day/night lighting, weather, and a growing city economy.
-- Offline-first gameplay; online multiplayer will be added only after synchronization and server security are implemented and tested.
+## Current Godot milestone
+- Procedural 3D city prototype with roads, buildings, districts, camera and touch controls.
+- Building placement, coins, recruitment, supplies and local save/load.
+- Campaign director with rival faction state, turn advancement and territory capture.
+- Battlefield prototype with pathfinding, formations, battle units and tactical orders.
+- Android export workflow, APK package/signature checks and emulator smoke-test workflow.
+- Multiplayer-session and device/asset-profile modules are foundations only; they are not yet complete online PvP or automatic thermal management.
 
-## Current source milestone
-- Procedural greybox city grid with roads, ground, buildings, sun lighting, and a camera.
-- First building loop: choose a house, shop, or office; tap open ground to place it; coins are deducted.
-- Local save/load uses Unity PlayerPrefs JSON.
-- This is an early prototype, not a finished realistic game.
+## Development status
+This is still a prototype, not a finished or production release. The city and battlefield need production-quality assets, expanded gameplay, balancing, optimization and extensive device testing. A passing CI check or debug APK does not prove the game is fully functional or offline-tested on a physical phone.
 
-## Unity scene setup
-1. Create a Unity 3D project.
-2. Add an empty GameObject named `CityRoot` to a scene.
-3. Add both `CityPrototype` and `CityBuildController` components to `CityRoot`.
-4. Ensure the scene has a camera tagged `MainCamera`, or let `CityPrototype` create one.
-5. Press Play. Select a building from the bottom toolbar and tap open ground to place it.
-6. Use SAVE and LOAD to test local persistence.
+## Build and validation
+- Engine: Godot 4.4.1.
+- Project folder: `godot/`.
+- Open `godot/project.godot` in Godot.
+- Headless validation and campaign/battle smoke tests run through `.github/workflows/godot-check.yml`.
+- Android debug APK export and emulator launch checks run through `.github/workflows/tiger-city-android.yml`.
+- Android package ID: `com.tigerchat.tigercity3d`.
 
-## Known limitations
-- The current visuals use built-in primitive geometry and the legacy Standard shader. They are greybox placeholders, not photorealistic assets.
-- The first touch interaction uses Unity's legacy mouse input mapping; the final Android input system must be configured and device-tested.
-- No complete Unity project scaffold, production assets, online multiplayer backend, or verified Android APK is included yet.
-- Unity Editor is pinned to Unity 6.3 (`6000.3.28f1`) for the initial cloud-build setup; confirm this editor release is available in the Unity Build Automation dashboard before the first build.
+The CI APK uses a temporary debug signing key and is for testing only. A permanent release signing key must be configured securely before publishing production updates.
 
-## Project structure
-- `Assets/Scripts/` contains prototype gameplay scripts.
-- `Assets/_Project/Scenes/` is reserved for production scenes.
-- `Assets/_Project/Art/` contains models and textures.
-- `Assets/_Project/Materials/`, `Prefabs/`, `UI/`, `Audio/`, and `Settings/` organize production assets.
-- `Packages/manifest.json` defines Unity Package Manager dependencies.
-- `ProjectSettings/ProjectVersion.txt` pins the editor version for cloud auto-detection.
+## Mobile performance target
+The initial target includes Android phones with 4 GB RAM. Start with Low graphics, conservative visible-unit limits and small texture variants; validate memory, frame rate, heat and battery use on physical devices before raising quality.
 
-## Android cloud build path
-1. Open the Unity Cloud Dashboard and select this Unity project.
-2. Open DevOps > Build Automation > Settings > Source control.
-3. Select GitHub and authorize repository access. This repository is public, so read-only access is sufficient for a manual build; auto-build needs repository webhook permission.
-4. Save the source-control settings, then create a build configuration for the `main` branch.
-5. Choose Android, select Unity `6000.3.28f1` (or the exact version confirmed in the dashboard), and configure an APK build rather than an Android App Bundle for direct phone installation.
-6. Start a build and check Build history. Download/install only after the build reports success.
+## Project layout
+- `godot/`: Godot project, scene, gameplay scripts, tests and export preset.
+- `scripts/`: Android emulator smoke test.
+- `.github/workflows/`: Godot validation and Android build workflows.
+- `PROJECT_COMPLETION_CHECKLIST.md`: evidence-based feature and release checklist.
+- `STANDALONE_ANDROID.md`: standalone Android packaging notes.
 
-Cloud build is not yet configured or tested. The project still needs a real Unity scene and a successful Unity import/compile before an APK can be expected.
-
-## Validation status
-Source files have been committed to GitHub. No Unity compilation, Play Mode test, Android device test, or APK build has been run yet.
+All active feature work should branch from the Godot-only line so Unity history does not become a dependency of later Godot PRs.
