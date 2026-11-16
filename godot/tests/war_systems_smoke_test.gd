@@ -48,7 +48,6 @@ func _run_tests() -> void:
 	_check(game_scene != null, "main game scene loads")
 	var game := game_scene.instantiate()
 	root.add_child(game)
-	await process_frame
 	_check(is_instance_valid(game.campaign_director), "campaign director is connected to main game")
 	_check(is_instance_valid(game.battlefield_systems), "battlefield systems are connected to main game")
 	game._advance_campaign_turn()
