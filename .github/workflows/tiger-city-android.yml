@@ -197,6 +197,9 @@ jobs:
         run: |
           "$ANDROID_HOME/build-tools/34.0.0/aapt" dump badging build/TIGER_CITY_3D-debug.apk | grep "package: name='com.tigerchat.tigercity3d'"
           "$ANDROID_HOME/build-tools/34.0.0/apksigner" verify build/TIGER_CITY_3D-debug.apk
+          unzip -l build/TIGER_CITY_3D-debug.apk | grep -q 'lib/arm64-v8a/'
+          unzip -l build/TIGER_CITY_3D-debug.apk | grep -q 'lib/x86_64/'
+          echo "APK contains arm64-v8a and x86_64 native libraries."
 
       - name: Install screenshot validation dependency
         run: python3 -m pip install --break-system-packages pillow
