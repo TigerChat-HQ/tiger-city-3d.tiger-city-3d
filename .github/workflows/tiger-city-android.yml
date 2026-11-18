@@ -198,14 +198,17 @@ jobs:
           "$ANDROID_HOME/build-tools/34.0.0/aapt" dump badging build/TIGER_CITY_3D-debug.apk | grep "package: name='com.tigerchat.tigercity3d'"
           "$ANDROID_HOME/build-tools/34.0.0/apksigner" verify build/TIGER_CITY_3D-debug.apk
 
+      - name: Install screenshot validation dependency
+        run: python3 -m pip install --break-system-packages pillow
+
       - name: Run Android emulator launch and blank-screen smoke tests
         uses: reactivecircus/android-emulator-runner@v2
         with:
           api-level: 34
-          target: google_apis
+          target: default
           arch: x86_64
           profile: pixel_2
-          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -no-snapshot
           script: bash scripts/android-emulator-smoke-test.sh build/TIGER_CITY_3D-debug.apk
 
       - name: Upload standalone APK
