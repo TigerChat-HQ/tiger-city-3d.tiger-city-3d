@@ -250,7 +250,7 @@ func _build_production_network() -> void:
 
 func _create_truck(index: int) -> Node3D:
 	var truck := Node3D.new()
-	var paint := [Color(0.72, 0.18, 0.12), Color(0.16, 0.36, 0.68), Color(0.72, 0.62, 0.30)][index % 3]
+	var paint: Color = [Color(0.72, 0.18, 0.12), Color(0.16, 0.36, 0.68), Color(0.72, 0.62, 0.30)][index % 3]
 	var body := MeshInstance3D.new()
 	var body_mesh := BoxMesh.new()
 	body_mesh.size = Vector3(2.8, 0.75, 1.45)
