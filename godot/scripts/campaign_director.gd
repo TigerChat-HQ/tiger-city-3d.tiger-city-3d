@@ -147,5 +147,10 @@ func load_campaign() -> bool:
 	active_campaign = str(parsed.get("campaign", "the_five_fronts"))
 	territories = parsed.get("territories", {})
 	factions = parsed.get("factions", {})
-	objectives = parsed.get("objectives", [])
+	var loaded_objectives: Variant = parsed.get("objectives", [])
+	objectives.clear()
+	if loaded_objectives is Array:
+		for item in loaded_objectives:
+			if item is Dictionary:
+				objectives.append(item)
 	return not territories.is_empty()
