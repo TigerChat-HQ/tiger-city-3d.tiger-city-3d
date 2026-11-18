@@ -16,11 +16,21 @@ var cover_objects: Array[Node3D] = []
 var destructible_health: Dictionary = {}
 var unit_groups: Dictionary = {}
 
+func _init() -> void:
+	_configure_navigation_grid()
+
 func _ready() -> void:
+	_ensure_navigation_grid()
+
+func _configure_navigation_grid() -> void:
 	navigation_grid.region = Rect2i(grid_origin, grid_size)
 	navigation_grid.cell_size = Vector2(cell_size, cell_size)
 	navigation_grid.diagonal_mode = AStarGrid2D.DIAGONAL_MODE_AT_LEAST_ONE_WALKABLE
 	navigation_grid.update()
+
+func _ensure_navigation_grid() -> void:
+	if navigation_grid.is_dirty():
+		navigation_grid.update()
 
 func world_to_cell(world_position: Vector3) -> Vector2i:
 	return Vector2i(roundi(world_position.x / cell_size), roundi(world_position.z / cell_size))
@@ -29,6 +39,7 @@ func cell_to_world(cell: Vector2i, height: float = 0.0) -> Vector3:
 	return Vector3(float(cell.x) * cell_size, height, float(cell.y) * cell_size)
 
 func set_obstacle(world_position: Vector3, blocked: bool) -> void:
+	_ensure_navigation_grid()
 	var cell := world_to_cell(world_position)
 	if not navigation_grid.is_in_boundsv(cell):
 		return
@@ -39,6 +50,7 @@ func set_obstacle(world_position: Vector3, blocked: bool) -> void:
 		blocked_cells.erase(cell)
 
 func find_path(start: Vector3, goal: Vector3) -> PackedVector3Array:
+	_ensure_navigation_grid()
 	var from_cell := world_to_cell(start)
 	var to_cell := world_to_cell(goal)
 	if not navigation_grid.is_in_boundsv(from_cell) or not navigation_grid.is_in_boundsv(to_cell):
