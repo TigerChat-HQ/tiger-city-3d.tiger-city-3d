@@ -9,24 +9,29 @@ test -s "$APK_PATH"
 adb wait-for-device
 adb install -r "$APK_PATH"
 
-# Verify the local single-player build can cold-launch without network access.
-adb shell svc wifi disable || true
-adb shell svc data disable || true
+# The AOSP emulator has no carrier/data service; disable Wi-Fi when available.
+adb shell cmd wifi set-wifi-enabled disabled >/dev/null 2>&1 || true
 
-launch_and_check() {
-  adb shell monkey -p "$PACKAGE" 1 >/dev/null
-  for attempt in $(seq 1 40); do
-    if adb shell pidof "$PACKAGE" >/dev/null 2>&1; then
-      break
+wait_for_foreground() {
+  for attempt in $(seq 1 60); do
+    if adb shell dumpsys activity activities 2>/dev/null | grep -E 'mResumedActivity|topResumedActivity' | grep -q "$PACKAGE"; then
+      return 0
     fi
     sleep 1
   done
+  echo "Game did not reach the foreground within 60 seconds."
+  adb shell dumpsys activity activities | tail -n 80 || true
+  adb logcat -d -t 500 | grep -iE 'fatal exception|AndroidRuntime|Godot|tiger' | tail -n 100 || true
+  return 1
+}
+
+launch_and_check() {
+  adb shell monkey -p "$PACKAGE" 1 >/dev/null
+  wait_for_foreground
   adb shell pidof "$PACKAGE" >/dev/null
-  sleep 20
-  adb shell dumpsys activity activities | grep -E 'mResumedActivity|topResumedActivity' | grep -q "$PACKAGE"
+  sleep 8
   adb exec-out screencap -p > "$SCREENSHOT"
   test -s "$SCREENSHOT"
-  python3 -m pip install --quiet --break-system-packages pillow
   python3 - "$SCREENSHOT" <<'PY'
 import sys
 from PIL import Image, ImageStat
@@ -45,7 +50,7 @@ assert white < .995 and black < .995, "Screen is almost entirely white or black"
 PY
 }
 
-echo "Offline cold launch (Wi-Fi and mobile data disabled)"
+echo "Offline cold launch"
 launch_and_check
 echo "Background/resume cycle"
 adb shell input keyevent 3
