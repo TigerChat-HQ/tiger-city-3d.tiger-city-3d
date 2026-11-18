@@ -176,7 +176,7 @@ jobs:
           keytool -genkeypair -v -keystore "$RUNNER_TEMP/android/debug.keystore" -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
 
       - name: Import Godot project and generate editor cache
-        timeout-minutes: 15
+        timeout-minutes: 35
         run: |
           godot-bin/Godot_v4.4.1-stable_linux.x86_64 --headless --editor --editor-settings-path "$HOME/.config/godot" --path godot --quit --verbose
 
