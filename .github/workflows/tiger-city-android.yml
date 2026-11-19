@@ -125,6 +125,28 @@ jobs:
           echo "ANDROID_HOME=$ANDROID_HOME" >> "$GITHUB_ENV"
           echo "ANDROID_SDK_ROOT=$ANDROID_HOME" >> "$GITHUB_ENV"
 
+      # Install the emulator package before the runner action. sdkmanager has
+      # occasionally returned a truncated emulator ZIP on hosted runners;
+      # retry from a clean package cache before handing the SDK to the action.
+      - name: Preinstall Android Emulator package with retry
+        shell: bash
+        run: |
+          set -euo pipefail
+          SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          installed=0
+          for attempt in 1 2 3; do
+            echo "Android Emulator install attempt $attempt/3"
+            rm -rf "$ANDROID_HOME/temp" "$HOME/.android/cache"
+            if "$SDKMANAGER" --install emulator --channel=0 && test -x "$ANDROID_HOME/emulator/emulator"; then
+              "$ANDROID_HOME/emulator/emulator" -version
+              installed=1
+              break
+            fi
+            rm -rf "$ANDROID_HOME/emulator"
+            sleep $((attempt * 10))
+          done
+          test "$installed" -eq 1
+
       - name: Download CC0 photogrammetry PBR materials
         run: |
           mkdir -p godot/assets/materials/Asphalt032 godot/assets/materials/Concrete049 godot/assets/materials/PavingStones135
@@ -195,7 +217,12 @@ jobs:
 
       - name: Verify APK package
         run: |
-          "$ANDROID_HOME/build-tools/34.0.0/aapt" dump badging build/TIGER_CITY_3D-debug.apk | grep "package: name='com.tigerchat.tigercity3d'"
+          APKANALYZER="$ANDROID_HOME/cmdline-tools/latest/bin/apkanalyzer"
+          test -x "$APKANALYZER"
+          APP_ID="$("$APKANALYZER" manifest application-id build/TIGER_CITY_3D-debug.apk)"
+          test "$APP_ID" = "com.tigerchat.tigercity3d"
+          "$APKANALYZER" manifest print build/TIGER_CITY_3D-debug.apk > build/AndroidManifest.xml
+          grep -q 'package="com.tigerchat.tigercity3d"' build/AndroidManifest.xml
           "$ANDROID_HOME/build-tools/34.0.0/apksigner" verify build/TIGER_CITY_3D-debug.apk
           unzip -l build/TIGER_CITY_3D-debug.apk | grep -q 'lib/arm64-v8a/'
           unzip -l build/TIGER_CITY_3D-debug.apk | grep -q 'lib/x86_64/'
