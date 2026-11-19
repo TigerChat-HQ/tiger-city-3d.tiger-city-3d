@@ -94,12 +94,20 @@ func _notification(what: int) -> void:
 			call_deferred("_refresh_after_android_resume")
 
 func _refresh_after_android_resume() -> void:
+	# Android can report RESUMED before the recreated EGL surface is ready.
+	# Give the platform one short interval to restore the surface before drawing.
+	await get_tree().create_timer(0.75).timeout
+	if not is_inside_tree():
+		_resume_refresh_pending = false
+		return
+	if is_instance_valid(camera):
+		camera.make_current()
+		_update_camera()
 	await get_tree().process_frame
 	RenderingServer.force_sync()
 	RenderingServer.force_draw()
 	await get_tree().process_frame
 	RenderingServer.force_draw()
-	_update_camera()
 	_resume_refresh_pending = false
 
 func _ready() -> void:
