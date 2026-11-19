@@ -115,6 +115,11 @@ func _ready() -> void:
 	_init_war_systems()
 	_build_ui()
 	_load_graphics_preferences()
+	if OS.get_name() == "Android":
+		# Keep Android on the conservative quality preset; the mobile Vulkan renderer
+		# handles surface recreation while this avoids costly desktop-grade effects.
+		graphics_quality = 0
+		render_resolution_scale = minf(render_resolution_scale, 0.7)
 	_apply_graphics_quality(graphics_quality, false)
 	_load_game()
 	_update_ui()
