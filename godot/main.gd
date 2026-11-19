@@ -79,6 +79,29 @@ var campaign_director: Node
 var battlefield_systems: Node3D
 var campaign_status_label: Label
 
+var _resume_refresh_pending := false
+
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_APPLICATION_PAUSED:
+		# Preserve the current city state before Android suspends the activity.
+		if is_instance_valid(status_label):
+			_save_game()
+	elif what == NOTIFICATION_APPLICATION_RESUMED or what == NOTIFICATION_APPLICATION_FOCUS_IN:
+		# Android may recreate the EGL surface while the Godot scene stays alive.
+		# Wait for the resumed frame, synchronize the renderer, then force fresh draws.
+		if not _resume_refresh_pending:
+			_resume_refresh_pending = true
+			call_deferred("_refresh_after_android_resume")
+
+func _refresh_after_android_resume() -> void:
+	await get_tree().process_frame
+	RenderingServer.force_sync()
+	RenderingServer.force_draw()
+	await get_tree().process_frame
+	RenderingServer.force_draw()
+	_update_camera()
+	_resume_refresh_pending = false
+
 func _ready() -> void:
 	_build_world()
 	_init_war_systems()
