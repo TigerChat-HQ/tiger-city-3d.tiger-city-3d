@@ -4,6 +4,9 @@ set -euo pipefail
 APK_PATH="${1:?Usage: android-emulator-smoke-test.sh path/to.apk}"
 PACKAGE="com.tigerchat.tigercity3d"
 SCREENSHOT="/tmp/tiger-city-launch.png"
+DIAGNOSTICS_DIR="build/android-smoke-diagnostics"
+mkdir -p "$DIAGNOSTICS_DIR"
+trap 'status=$?; if [ "$status" -ne 0 ]; then cp "$SCREENSHOT" "$DIAGNOSTICS_DIR/failure-screen.png" 2>/dev/null || true; adb logcat -d -t 5000 > "$DIAGNOSTICS_DIR/logcat.txt" 2>/dev/null || true; adb shell dumpsys activity activities > "$DIAGNOSTICS_DIR/activities.txt" 2>/dev/null || true; adb shell dumpsys SurfaceFlinger > "$DIAGNOSTICS_DIR/surfaceflinger.txt" 2>/dev/null || true; fi; exit "$status"' EXIT
 
 test -s "$APK_PATH"
 adb wait-for-device
