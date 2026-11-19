@@ -7,6 +7,25 @@ SCREENSHOT="/tmp/tiger-city-launch.png"
 
 test -s "$APK_PATH"
 adb wait-for-device
+
+echo "Waiting for Android Package Manager service..."
+ready=0
+for attempt in $(seq 1 90); do
+  if adb shell cmd package list packages >/dev/null 2>&1; then
+    ready=1
+    echo "Android Package Manager is ready (attempt $attempt)."
+    break
+  fi
+  echo "Package Manager not ready yet ($attempt/90)."
+  sleep 2
+done
+if [ "$ready" -ne 1 ]; then
+  echo "Android Package Manager did not become ready."
+  adb shell getprop sys.boot_completed || true
+  adb shell service check package || true
+  adb logcat -d -t 1000 | grep -iE 'PackageManager|system_server|FATAL|AndroidRuntime' | tail -n 160 || true
+  exit 1
+fi
 adb install -r "$APK_PATH"
 
 # The AOSP emulator has no carrier/data service; disable Wi-Fi when available.
