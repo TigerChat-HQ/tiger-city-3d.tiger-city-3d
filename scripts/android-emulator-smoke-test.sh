@@ -12,25 +12,40 @@ trap 'status=$?; if [ "$status" -ne 0 ]; then cp "$SCREENSHOT" "$DIAGNOSTICS_DIR
 test -s "$APK_PATH"
 adb wait-for-device
 
-echo "Waiting for Android Package Manager service..."
-ready=0
-for attempt in $(seq 1 90); do
-  if adb shell cmd package list packages >/dev/null 2>&1; then
-    ready=1
-    echo "Android Package Manager is ready (attempt $attempt)."
-    break
+echo "Waiting for a stable Android boot and core system services..."
+ready_streak=0
+for attempt in $(seq 1 180); do
+  booted="$(adb shell getprop sys.boot_completed 2>/dev/null | tr -d '\\r' || true)"
+  package_service="$(adb shell service check package 2>/dev/null || true)"
+  activity_service="$(adb shell service check activity 2>/dev/null || true)"
+  device_state="$(adb get-state 2>/dev/null || true)"
+  if [ "$device_state" = "device" ] && [ "$booted" = "1" ] && \
+     printf '%s' "$package_service" | grep -q 'found' && \
+     printf '%s' "$activity_service" | grep -q 'found'; then
+    ready_streak=$((ready_streak + 1))
+    echo "Core services healthy ($ready_streak/10 consecutive checks; attempt $attempt/180)."
+    if [ "$ready_streak" -ge 10 ]; then
+      break
+    fi
+  else
+    ready_streak=0
+    echo "Waiting for services ($attempt/180): state=$device_state boot=$booted package='$package_service' activity='$activity_service'"
   fi
-  echo "Package Manager not ready yet ($attempt/90)."
   sleep 2
 done
-if [ "$ready" -ne 1 ]; then
-  echo "Android Package Manager did not become ready."
+if [ "$ready_streak" -lt 10 ]; then
+  echo "Android core services did not remain healthy for 20 seconds."
+  adb devices -l || true
   adb shell getprop sys.boot_completed || true
   adb shell service check package || true
-  adb logcat -d -t 1000 | grep -iE 'PackageManager|system_server|FATAL|AndroidRuntime' | tail -n 160 || true
+  adb shell service check activity || true
+  adb logcat -d -t 2000 | grep -iE 'PackageManager|system_server|Watchdog|FATAL|AndroidRuntime' | tail -n 200 || true
   exit 1
 fi
-adb install -r "$APK_PATH"
+
+# Avoid adb's incremental-install path: it can destabilize package installation
+# on a freshly booted hosted emulator. Stream the APK after system services settle.
+adb install --no-incremental -r "$APK_PATH"
 
 # The AOSP emulator has no carrier/data service; disable Wi-Fi when available.
 adb shell cmd wifi set-wifi-enabled disabled >/dev/null 2>&1 || true
