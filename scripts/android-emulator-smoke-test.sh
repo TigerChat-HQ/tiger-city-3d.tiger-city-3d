@@ -7,7 +7,7 @@ SCREENSHOT="/tmp/tiger-city-launch.png"
 CURRENT_STAGE="setup"
 DIAGNOSTICS_DIR="build/android-smoke-diagnostics"
 mkdir -p "$DIAGNOSTICS_DIR"
-trap 'status=$?; if [ "$status" -ne 0 ]; then cp "$SCREENSHOT" "$DIAGNOSTICS_DIR/failure-screen.png" 2>/dev/null || true; printf '%s\\n' "$CURRENT_STAGE" > "$DIAGNOSTICS_DIR/failure-stage.txt"; adb logcat -d -t 5000 > "$DIAGNOSTICS_DIR/logcat.txt" 2>/dev/null || true; adb shell dumpsys activity activities > "$DIAGNOSTICS_DIR/activities.txt" 2>/dev/null || true; adb shell dumpsys SurfaceFlinger > "$DIAGNOSTICS_DIR/surfaceflinger.txt" 2>/dev/null || true; fi; exit "$status"' EXIT
+trap 'status=$?; if [ "$status" -ne 0 ]; then cp "$SCREENSHOT" "$DIAGNOSTICS_DIR/failure-screen.png" 2>/dev/null || true; printf '%s\n' "$CURRENT_STAGE" > "$DIAGNOSTICS_DIR/failure-stage.txt"; adb logcat -d -t 5000 > "$DIAGNOSTICS_DIR/logcat.txt" 2>/dev/null || true; adb shell dumpsys activity activities > "$DIAGNOSTICS_DIR/activities.txt" 2>/dev/null || true; adb shell dumpsys SurfaceFlinger > "$DIAGNOSTICS_DIR/surfaceflinger.txt" 2>/dev/null || true; fi; exit "$status"' EXIT
 
 test -s "$APK_PATH"
 adb wait-for-device
