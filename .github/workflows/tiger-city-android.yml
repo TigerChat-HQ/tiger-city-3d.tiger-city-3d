@@ -212,27 +212,7 @@ jobs:
           arch: x86_64
           profile: pixel_2
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -no-snapshot
-          script: |
-            set -euo pipefail
-            echo "Waiting for Android Package Manager service..."
-            ready=0
-            for attempt in $(seq 1 90); do
-              if adb shell cmd package list packages >/dev/null 2>&1; then
-                ready=1
-                echo "Android Package Manager is ready (attempt $attempt)."
-                break
-              fi
-              echo "Package Manager not ready yet ($attempt/90)."
-              sleep 2
-            done
-            if [ "$ready" -ne 1 ]; then
-              echo "Android Package Manager did not become ready."
-              adb shell getprop sys.boot_completed || true
-              adb shell service check package || true
-              adb logcat -d -t 1000 | grep -iE 'PackageManager|system_server|FATAL|AndroidRuntime' | tail -n 160 || true
-              exit 1
-            fi
-            bash scripts/android-emulator-smoke-test.sh build/TIGER_CITY_3D-debug.apk
+          script: bash scripts/android-emulator-smoke-test.sh build/TIGER_CITY_3D-debug.apk
 
       - name: Upload standalone APK
         uses: actions/upload-artifact@v4
