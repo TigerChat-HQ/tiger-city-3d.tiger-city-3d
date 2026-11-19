@@ -4,9 +4,10 @@ set -euo pipefail
 APK_PATH="${1:?Usage: android-emulator-smoke-test.sh path/to.apk}"
 PACKAGE="com.tigerchat.tigercity3d"
 SCREENSHOT="/tmp/tiger-city-launch.png"
+CURRENT_STAGE="setup"
 DIAGNOSTICS_DIR="build/android-smoke-diagnostics"
 mkdir -p "$DIAGNOSTICS_DIR"
-trap 'status=$?; if [ "$status" -ne 0 ]; then cp "$SCREENSHOT" "$DIAGNOSTICS_DIR/failure-screen.png" 2>/dev/null || true; adb logcat -d -t 5000 > "$DIAGNOSTICS_DIR/logcat.txt" 2>/dev/null || true; adb shell dumpsys activity activities > "$DIAGNOSTICS_DIR/activities.txt" 2>/dev/null || true; adb shell dumpsys SurfaceFlinger > "$DIAGNOSTICS_DIR/surfaceflinger.txt" 2>/dev/null || true; fi; exit "$status"' EXIT
+trap 'status=$?; if [ "$status" -ne 0 ]; then cp "$SCREENSHOT" "$DIAGNOSTICS_DIR/failure-screen.png" 2>/dev/null || true; printf '%s\\n' "$CURRENT_STAGE" > "$DIAGNOSTICS_DIR/failure-stage.txt"; adb logcat -d -t 5000 > "$DIAGNOSTICS_DIR/logcat.txt" 2>/dev/null || true; adb shell dumpsys activity activities > "$DIAGNOSTICS_DIR/activities.txt" 2>/dev/null || true; adb shell dumpsys SurfaceFlinger > "$DIAGNOSTICS_DIR/surfaceflinger.txt" 2>/dev/null || true; fi; exit "$status"' EXIT
 
 test -s "$APK_PATH"
 adb wait-for-device
@@ -48,12 +49,15 @@ wait_for_foreground() {
 }
 
 launch_and_check() {
+  CURRENT_STAGE="${1:?stage name required}"
+  SCREENSHOT="/tmp/tiger-city-${CURRENT_STAGE}.png"
   adb shell monkey -p "$PACKAGE" 1 >/dev/null
   wait_for_foreground
   adb shell pidof "$PACKAGE" >/dev/null
   sleep 8
   adb exec-out screencap -p > "$SCREENSHOT"
   test -s "$SCREENSHOT"
+  cp "$SCREENSHOT" "$DIAGNOSTICS_DIR/${CURRENT_STAGE}.png"
   python3 - "$SCREENSHOT" <<'PY'
 import sys
 from PIL import Image, ImageStat
@@ -68,18 +72,18 @@ colors = len(set(pixels))
 stddev = sum(ImageStat.Stat(im).stddev) / 3
 print(f"Launch screenshot: {w}x{h}; sampled colors={colors}; mean channel stddev={stddev:.1f}; white={white:.3%}; black={black:.3%}")
 assert colors > 30 and stddev > 8, "Screen appears blank or nearly uniform"
-assert white < .995 and black < .995, "Screen is almost entirely white or black"
+assert white < .995 and black < .50, "Screen is almost entirely white or more than half black"
 PY
 }
 
 echo "Offline cold launch"
-launch_and_check
+launch_and_check cold_launch
 echo "Background/resume cycle"
 adb shell input keyevent 3
 sleep 3
-launch_and_check
+launch_and_check background_resume
 echo "Force-stop and cold relaunch"
 adb shell am force-stop "$PACKAGE"
 sleep 2
-launch_and_check
+launch_and_check force_stop_relaunch
 echo "Offline launch and Android launch/UI smoke tests passed."
