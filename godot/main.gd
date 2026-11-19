@@ -83,19 +83,33 @@ var _resume_refresh_pending := false
 
 func _notification(what: int) -> void:
 	if what == NOTIFICATION_APPLICATION_PAUSED:
+		print("[ANDROID_LIFECYCLE] application_paused")
 		# Preserve the current city state before Android suspends the activity.
 		if is_instance_valid(status_label):
 			_save_game()
-	elif what == NOTIFICATION_APPLICATION_RESUMED or what == NOTIFICATION_APPLICATION_FOCUS_IN:
-		# Android may recreate the EGL surface while the Godot scene stays alive.
-		# Wait for the resumed frame, synchronize the renderer, then force fresh draws.
-		if not _resume_refresh_pending:
-			_resume_refresh_pending = true
-			call_deferred("_refresh_after_android_resume")
+	elif what == NOTIFICATION_APPLICATION_RESUMED:
+		print("[ANDROID_LIFECYCLE] application_resumed")
+		_schedule_android_resume_refresh()
+	elif what == NOTIFICATION_APPLICATION_FOCUS_IN:
+		print("[ANDROID_LIFECYCLE] application_focus_in")
+		_schedule_android_resume_refresh()
+	elif what == NOTIFICATION_APPLICATION_FOCUS_OUT:
+		print("[ANDROID_LIFECYCLE] application_focus_out")
+
+func _schedule_android_resume_refresh() -> void:
+	if _resume_refresh_pending:
+		print("[ANDROID_LIFECYCLE] resume_refresh_already_pending")
+		return
+	_resume_refresh_pending = true
+	call_deferred("_refresh_after_android_resume")
 
 func _refresh_after_android_resume() -> void:
-	# Android can report RESUMED before the recreated EGL surface is ready.
-	# Give the platform one short interval to restore the surface before drawing.
+	# The Android display server owns native-window and Vulkan swapchain recovery.
+	# This scene-level refresh only requests new frames; it cannot recreate a swapchain.
+	print("[ANDROID_LIFECYCLE] resume_refresh_waiting_for_surface; driver=%s method=%s" % [
+		RenderingServer.get_current_rendering_driver_name(),
+		RenderingServer.get_current_rendering_method()
+	])
 	await get_tree().create_timer(0.75).timeout
 	if not is_inside_tree():
 		_resume_refresh_pending = false
@@ -108,6 +122,7 @@ func _refresh_after_android_resume() -> void:
 	RenderingServer.force_draw()
 	await get_tree().process_frame
 	RenderingServer.force_draw()
+	print("[ANDROID_LIFECYCLE] resume_refresh_draw_requested")
 	_resume_refresh_pending = false
 
 func _ready() -> void:
