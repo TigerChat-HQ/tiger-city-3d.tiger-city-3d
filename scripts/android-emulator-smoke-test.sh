@@ -15,7 +15,7 @@ adb wait-for-device
 echo "Waiting for a stable Android boot and core system services..."
 ready_streak=0
 for attempt in $(seq 1 180); do
-  booted="$(adb shell getprop sys.boot_completed 2>/dev/null | tr -d '\\r' || true)"
+  booted="$(adb shell getprop sys.boot_completed 2>/dev/null | tr -d '\r' || true)"
   package_service="$(adb shell service check package 2>/dev/null || true)"
   activity_service="$(adb shell service check activity 2>/dev/null || true)"
   device_state="$(adb get-state 2>/dev/null || true)"
