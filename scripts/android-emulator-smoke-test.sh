@@ -76,14 +76,46 @@ assert white < .995 and black < .50, "Screen is almost entirely white or more th
 PY
 }
 
+FAILURES=0
+
 echo "Offline cold launch"
-launch_and_check cold_launch
-echo "Background/resume cycle"
-adb shell input keyevent 3
-sleep 3
-launch_and_check background_resume
+if launch_and_check cold_launch; then
+  echo "PASS: cold launch"
+else
+  echo "FAIL: cold launch"
+  FAILURES=$((FAILURES + 1))
+fi
+
+# Repeat the lifecycle transition three times. Continue after a failed screenshot
+# so later cycles and the force-stop relaunch still produce useful diagnostics.
+for cycle in 1 2 3; do
+  stage="background_resume_${cycle}"
+  echo "Background/resume cycle ${cycle}/3"
+  adb shell input keyevent 3
+  sleep 3
+  if launch_and_check "$stage"; then
+    echo "PASS: $stage"
+  else
+    echo "FAIL: $stage"
+    FAILURES=$((FAILURES + 1))
+  fi
+  adb logcat -d -t 2500 > "$DIAGNOSTICS_DIR/${stage}-logcat.txt" 2>/dev/null || true
+  adb shell dumpsys activity activities > "$DIAGNOSTICS_DIR/${stage}-activities.txt" 2>/dev/null || true
+  adb shell dumpsys SurfaceFlinger > "$DIAGNOSTICS_DIR/${stage}-surfaceflinger.txt" 2>/dev/null || true
+done
+
 echo "Force-stop and cold relaunch"
 adb shell am force-stop "$PACKAGE"
 sleep 2
-launch_and_check force_stop_relaunch
-echo "Offline launch and Android launch/UI smoke tests passed."
+if launch_and_check force_stop_relaunch; then
+  echo "PASS: force-stop relaunch"
+else
+  echo "FAIL: force-stop relaunch"
+  FAILURES=$((FAILURES + 1))
+fi
+
+if [ "$FAILURES" -ne 0 ]; then
+  echo "Android lifecycle smoke tests failed: $FAILURES stage(s) failed."
+  exit 1
+fi
+echo "Offline cold launch, three background/resume cycles, and force-stop relaunch passed."
