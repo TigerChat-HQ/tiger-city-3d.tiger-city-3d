@@ -214,10 +214,13 @@ jobs:
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -no-snapshot
           script: bash scripts/android-emulator-smoke-test.sh build/TIGER_CITY_3D-debug.apk
 
-      - name: Upload standalone APK
+      - name: Upload APK and Android smoke-test diagnostics
+        if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: TIGER-CITY-3D-Android-debug
-          path: build/TIGER_CITY_3D-debug.apk
-          if-no-files-found: error
+          name: TIGER-CITY-3D-Android-debug-and-diagnostics
+          path: |
+            build/TIGER_CITY_3D-debug.apk
+            build/android-smoke-diagnostics/
+          if-no-files-found: warn
           retention-days: 14
