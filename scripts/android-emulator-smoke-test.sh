@@ -106,7 +106,8 @@ PY
     echo "No stable landscape game frame appeared within 60 seconds."
     return 1
   fi
-  cp "$SCREENSHOT" "$DIAGNOSTICS_DIR/${CURRENT_STAGE}.png"}
+  cp "$SCREENSHOT" "$DIAGNOSTICS_DIR/${CURRENT_STAGE}.png"
+}
 
 FAILURES=0
 
