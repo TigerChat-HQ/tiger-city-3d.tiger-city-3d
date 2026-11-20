@@ -81,6 +81,13 @@ var campaign_status_label: Label
 
 var _resume_refresh_pending := false
 
+func _enforce_android_landscape() -> void:
+	if OS.get_name() != "Android":
+		return
+	# Re-assert landscape whenever Android recreates the activity/window.
+	DisplayServer.screen_set_orientation(DisplayServer.SCREEN_LANDSCAPE)
+	print("[ANDROID_LIFECYCLE] landscape_orientation_requested")
+
 func _notification(what: int) -> void:
 	if what == NOTIFICATION_APPLICATION_PAUSED:
 		print("[ANDROID_LIFECYCLE] application_paused")
@@ -89,9 +96,11 @@ func _notification(what: int) -> void:
 			_save_game()
 	elif what == NOTIFICATION_APPLICATION_RESUMED:
 		print("[ANDROID_LIFECYCLE] application_resumed")
+		_enforce_android_landscape()
 		_schedule_android_resume_refresh()
 	elif what == NOTIFICATION_APPLICATION_FOCUS_IN:
 		print("[ANDROID_LIFECYCLE] application_focus_in")
+		_enforce_android_landscape()
 		_schedule_android_resume_refresh()
 	elif what == NOTIFICATION_APPLICATION_FOCUS_OUT:
 		print("[ANDROID_LIFECYCLE] application_focus_out")
@@ -126,6 +135,7 @@ func _refresh_after_android_resume() -> void:
 	_resume_refresh_pending = false
 
 func _ready() -> void:
+	_enforce_android_landscape()
 	_build_world()
 	_init_war_systems()
 	_build_ui()
