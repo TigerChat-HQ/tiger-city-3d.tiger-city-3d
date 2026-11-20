@@ -69,16 +69,21 @@ launch_and_check() {
   adb shell monkey -p "$PACKAGE" 1 >/dev/null
   wait_for_foreground
   adb shell pidof "$PACKAGE" >/dev/null
-  sleep 8
-  adb exec-out screencap -p > "$SCREENSHOT"
-  test -s "$SCREENSHOT"
-  cp "$SCREENSHOT" "$DIAGNOSTICS_DIR/${CURRENT_STAGE}.png"
-  python3 - "$SCREENSHOT" <<'PY'
+  # Android may report the activity foreground before its orientation and
+  # first rendered frame have settled. Poll the actual framebuffer for up to
+  # 60 seconds instead of treating a transient portrait/black frame as final.
+  rendered=0
+  for attempt in $(seq 1 30); do
+    adb exec-out screencap -p > "$SCREENSHOT"
+    test -s "$SCREENSHOT"
+    if python3 - "$SCREENSHOT" <<'PY'
 import sys
 from PIL import Image, ImageStat
 im = Image.open(sys.argv[1]).convert("RGB")
 w, h = im.size
-assert w > h, f"Expected landscape launch, got {w}x{h}"
+if w <= h:
+    print(f"WAIT: orientation is still portrait ({w}x{h})")
+    raise SystemExit(2)
 im = im.crop((int(w*.08), int(h*.08), int(w*.92), int(h*.92)))
 pixels = list(im.resize((160, 90)).getdata())
 white = sum(1 for p in pixels if min(p) >= 245) / len(pixels)
@@ -86,10 +91,22 @@ black = sum(1 for p in pixels if max(p) <= 10) / len(pixels)
 colors = len(set(pixels))
 stddev = sum(ImageStat.Stat(im).stddev) / 3
 print(f"Launch screenshot: {w}x{h}; sampled colors={colors}; mean channel stddev={stddev:.1f}; white={white:.3%}; black={black:.3%}")
-assert colors > 30 and stddev > 8, "Screen appears blank or nearly uniform"
-assert white < .995 and black < .50, "Screen is almost entirely white or more than half black"
+if colors <= 30 or stddev <= 8 or white >= .995 or black >= .50:
+    print("WAIT: framebuffer is not yet a stable, visible game frame")
+    raise SystemExit(2)
 PY
-}
+    then
+      rendered=1
+      break
+    fi
+    echo "Waiting for landscape orientation and a non-blank rendered frame ($attempt/30)..."
+    sleep 2
+  done
+  if [ "$rendered" -ne 1 ]; then
+    echo "No stable landscape game frame appeared within 60 seconds."
+    return 1
+  fi
+  cp "$SCREENSHOT" "$DIAGNOSTICS_DIR/${CURRENT_STAGE}.png"}
 
 FAILURES=0
 
